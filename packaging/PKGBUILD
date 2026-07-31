@@ -2,7 +2,13 @@
 #
 # Build a source tarball first (from the repo root):
 #   git archive --format=tar.gz --prefix=burogu-0.1.0.0/ -o packaging/burogu-0.1.0.0.tar.gz HEAD
+# (or, before committing: tar --exclude=.git --exclude=dist-newstyle --exclude=site \
+#     -czf packaging/burogu-0.1.0.0.tar.gz --transform 's,^,burogu-0.1.0.0/,' app test burogu.cabal config.yaml)
 # Then, inside packaging/: makepkg -i
+#
+# GHC from ghcup: ghc and cabal-install are not pacman packages, so
+# dependency checks must be skipped (they live on PATH instead):
+#   makepkg -d -i
 #
 # The build compiles all Haskell dependencies from Hackage inside the
 # sandbox (network required); runtime dependencies are just gmp and zlib
