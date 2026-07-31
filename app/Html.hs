@@ -1,14 +1,23 @@
-module Html (groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl) where
+module Html (PageMeta (..), groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl) where
 
 import Config (SiteConfig (..))
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lucid qualified as L
+import Lucid.Base qualified as LB
 import Post (Post (..))
 
-layout :: SiteConfig -> Text -> L.Html () -> L.Html ()
-layout cfg pageTitle body =
+data PageMeta = PageMeta
+    { pmTitle :: Text
+    , pmOgType :: Text
+    , pmOgPath :: Text
+    , pmOgDescription :: Maybe Text
+    }
+
+layout :: SiteConfig -> PageMeta -> L.Html () -> L.Html ()
+layout cfg meta body =
     L.doctype_
         *> L.html_
             [L.lang_ (siteLang cfg)]
@@ -17,7 +26,8 @@ layout cfg pageTitle body =
                     L.meta_ [L.charset_ "utf-8"]
                     L.meta_ [L.name_ "viewport", L.content_ "width=device-width, initial-scale=1"]
                     L.meta_ [L.name_ "description", L.content_ (siteDescription cfg)]
-                    L.title_ (L.toHtml pageTitle)
+                    L.title_ (L.toHtml (pmTitle meta))
+                    renderOg cfg meta
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
@@ -27,9 +37,22 @@ layout cfg pageTitle body =
                     L.footer_ [L.class_ "site-footer"] $ L.p_ (L.toHtml ("© " <> siteAuthor cfg))
             )
 
-renderIndex :: SiteConfig -> [Post] -> L.Html ()
-renderIndex cfg posts = layout cfg (siteName cfg) $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
+renderOg :: SiteConfig -> PageMeta -> L.Html ()
+renderOg cfg meta = do
+    L.meta_ [LB.makeAttribute "property" "og:title", L.content_ (pmTitle meta)]
+    L.meta_ [LB.makeAttribute "property" "og:type", L.content_ (pmOgType meta)]
+    L.meta_ [LB.makeAttribute "property" "og:site_name", L.content_ (siteName cfg)]
+    L.meta_ [LB.makeAttribute "property" "og:description", L.content_ (fromMaybe (siteDescription cfg) (pmOgDescription meta))]
+    maybe (pure ()) renderOgUrl (siteBaseUrl cfg)
   where
+    renderOgUrl :: Text -> L.Html ()
+    renderOgUrl baseUrl = L.meta_ [LB.makeAttribute "property" "og:url", L.content_ (baseUrl <> pmOgPath meta)]
+
+renderIndex :: SiteConfig -> [Post] -> L.Html ()
+renderIndex cfg posts = layout cfg pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
+  where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = siteName cfg, pmOgType = "website", pmOgPath = "/", pmOgDescription = Nothing}
     item :: Post -> L.Html ()
     item post =
         L.li_ [L.class_ "post-item"] $ do
@@ -39,16 +62,21 @@ renderIndex cfg posts = layout cfg (siteName cfg) $ L.ul_ [L.class_ "post-list"]
             maybe (pure ()) renderDescription (postDescription post)
 
 renderPost :: SiteConfig -> Post -> L.Html ()
-renderPost cfg post = layout cfg (postTitle post) $ L.article_ $ do
+renderPost cfg post = layout cfg pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml (postTitle post))
     L.p_ [L.class_ "post-meta"] $ do
         L.time_ (L.toHtml (postDate post))
         renderTags (postTags post)
     L.div_ [L.class_ "post-body"] (L.toHtmlRaw (postBodyHtml post))
+  where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post}
 
 renderTagIndex :: SiteConfig -> [(Text, [Post])] -> L.Html ()
-renderTagIndex cfg groups = layout cfg ("Tags" :: Text) $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
+renderTagIndex cfg groups = layout cfg pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = "Tags", pmOgType = "website", pmOgPath = "/tags/", pmOgDescription = Nothing}
     item :: (Text, [Post]) -> L.Html ()
     item (tag, posts) =
         L.li_ [L.class_ "tag-item"] $ do
@@ -56,10 +84,12 @@ renderTagIndex cfg groups = layout cfg ("Tags" :: Text) $ L.ul_ [L.class_ "tag-l
             L.span_ [L.class_ "tag-count"] (L.toHtml ("(" <> T.pack (show (length posts)) <> ")"))
 
 renderTagArchive :: SiteConfig -> Text -> [Post] -> L.Html ()
-renderTagArchive cfg tag posts = layout cfg ("Tag: " <> tag) $ L.article_ $ do
+renderTagArchive cfg tag posts = layout cfg pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml tag)
     L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = "Tag: " <> tag, pmOgType = "website", pmOgPath = tagUrl tag, pmOgDescription = Nothing}
     item :: Post -> L.Html ()
     item post =
         L.li_ [L.class_ "post-item"] $ do

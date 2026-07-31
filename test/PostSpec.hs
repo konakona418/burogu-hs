@@ -4,8 +4,10 @@ import Config (SiteConfig (..), Theme (..))
 import Data.Either (isLeft)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, tagUrl)
+import Html (groupByTag, renderIndex, renderPost, tagUrl)
+import Lucid qualified as L
 import Post (Post (..), parsePost, warnCaseTags)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
@@ -45,6 +47,10 @@ tests =
         , feedEscaping
         , feedSummaryShown
         , feedSummaryHidden
+        , ogMetaOnPost
+        , ogTypeWebsiteOnIndex
+        , ogUrlAbsentWithoutBaseUrl
+        , ogDescriptionFallsBack
         ]
 
 fullFrontmatter :: TestTree
@@ -250,6 +256,37 @@ feedSummaryHidden =
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
+
+ogMetaOnPost :: TestTree
+ogMetaOnPost =
+    testCase "post pages carry article OG metadata" $ do
+        let html = renderHtml (renderPost testConfig (postWithTags ["essay"]))
+        assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
+        assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
+        assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
+
+ogTypeWebsiteOnIndex :: TestTree
+ogTypeWebsiteOnIndex =
+    testCase "index pages carry website OG metadata" $ do
+        let html = renderHtml (renderIndex testConfig [postWithTags ["essay"]])
+        assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
+        assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
+
+ogUrlAbsentWithoutBaseUrl :: TestTree
+ogUrlAbsentWithoutBaseUrl =
+    testCase "og:url is omitted without baseUrl" $ do
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [])
+        assertBool "no og:url" ("og:url" `notTextIn` html)
+        assertBool "og:title still present" ("og:title" `textIn` html)
+
+ogDescriptionFallsBack :: TestTree
+ogDescriptionFallsBack =
+    testCase "og:description falls back to siteDescription" $ do
+        let html = renderHtml (renderPost testConfig (postWithTags []))
+        assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
+
+renderHtml :: L.Html () -> Text
+renderHtml = TL.toStrict . L.renderText
 
 testConfig :: SiteConfig
 testConfig =
