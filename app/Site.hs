@@ -1,4 +1,4 @@
-module Site (build) where
+module Site (BuildReport (..), build) where
 
 import Config (SiteConfig (..), Theme (..))
 import Css (renderCss)
@@ -6,6 +6,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
+import Feed (renderAtom)
 import Html qualified as H
 import Lucid qualified as L
 import Post (Post (..))
@@ -23,7 +24,13 @@ srcDir = "src"
 outDir = "site"
 postsDir = "posts"
 
-build :: SiteConfig -> [Post] -> IO (Int, Int)
+data BuildReport = BuildReport
+    { brStaticFiles :: Int
+    , brTagPages :: Int
+    , brFeed :: Bool
+    }
+
+build :: SiteConfig -> [Post] -> IO BuildReport
 build config posts = do
     removePathForcibly outDir
     createDirectoryIfMissing True outDir
@@ -31,9 +38,9 @@ build config posts = do
     TIO.writeFile (outDir </> "style.css") (renderCss (themeHighlightStyle (siteTheme config)))
     mapM_ (writePost config) posts
     writeTagPages config posts
+    brFeed <- writeFeed config posts
     nStatic <- copyStatic
-    let nTags = length (H.groupByTag posts)
-    pure (nStatic, nTags)
+    pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed}
 
 writePost :: SiteConfig -> Post -> IO ()
 writePost config post = do
@@ -54,6 +61,15 @@ writeTagPage config tagsDir (tag, posts) = do
     let dir = tagsDir </> T.unpack tag
     createDirectoryIfMissing True dir
     TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderTagArchive config tag posts)))
+
+writeFeed :: SiteConfig -> [Post] -> IO Bool
+writeFeed config posts =
+    case siteBaseUrl config of
+        Just baseUrl
+            | not (null posts) -> do
+                TIO.writeFile (outDir </> "feed.xml") (renderAtom config baseUrl posts)
+                pure True
+        _ -> pure False
 
 copyStatic :: IO Int
 copyStatic = do

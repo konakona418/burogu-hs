@@ -5,7 +5,7 @@ import Control.Exception (IOException, catch)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Post (loadPosts, warnCaseTags)
-import Site (build)
+import Site (BuildReport (..), build)
 import System.Exit (exitFailure)
 import System.IO (stderr)
 
@@ -22,9 +22,10 @@ main = do
             exitFailure
         Right posts -> do
             mapM_ (TIO.hPutStrLn stderr . ("warning: " <>)) (warnCaseTags posts)
-            (nStatic, nTags) <- build config posts
+            report <- build config posts
             TIO.putStrLn "Build complete."
             TIO.putStrLn ("  Posts generated : " <> T.pack (show (length posts)))
-            TIO.putStrLn ("  Tags generated  : " <> T.pack (show nTags))
-            TIO.putStrLn ("  Static files    : " <> T.pack (show nStatic))
+            TIO.putStrLn ("  Tags generated  : " <> T.pack (show (brTagPages report)))
+            TIO.putStrLn ("  Static files    : " <> T.pack (show (brStaticFiles report)))
+            TIO.putStrLn ("  Feed            : " <> if brFeed report then "site/feed.xml" else "skipped (set baseUrl in config.yaml)")
             TIO.putStrLn "  Output directory: site/"

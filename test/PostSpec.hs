@@ -1,8 +1,10 @@
 module Main where
 
+import Config (SiteConfig (..), Theme (..))
 import Data.Either (isLeft)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Feed (feedUrl, renderAtom)
 import Html (groupByTag, tagUrl)
 import Post (Post (..), parsePost, warnCaseTags)
 import Test.Tasty (TestTree, defaultMain, testGroup)
@@ -36,6 +38,13 @@ tests =
         , tagGrouping
         , tagGroupingPreservesOrder
         , tagUrlTest
+        , feedUrlTest
+        , feedXmlDeclaration
+        , feedContainsEntryLink
+        , feedUpdated
+        , feedEscaping
+        , feedSummaryShown
+        , feedSummaryHidden
         ]
 
 fullFrontmatter :: TestTree
@@ -191,6 +200,68 @@ tagUrlTest =
     testCase "tagUrl points at the tag archive" $
         assertEqual "url" "/tags/Haskell/" (tagUrl "Haskell")
 
+feedUrlTest :: TestTree
+feedUrlTest =
+    testCase "feedUrl appends feed.xml" $
+        assertEqual "url" "https://lizi.moe/feed.xml" (feedUrl "https://lizi.moe")
+
+feedXmlDeclaration :: TestTree
+feedXmlDeclaration =
+    testCase "feed starts with the XML declaration" $
+        assertBool
+            "declaration"
+            ("<?xml version=\"1.0\" encoding=\"utf-8\"?>" `T.isPrefixOf` renderAtom testConfig "https://lizi.moe" [postWithTags []])
+
+feedContainsEntryLink :: TestTree
+feedContainsEntryLink =
+    testCase "entries link to absolute post URLs" $
+        assertBool
+            "entry link"
+            ("href=\"https://lizi.moe/posts/test/\"" `textIn` renderAtom testConfig "https://lizi.moe" [postWithTags []])
+
+feedUpdated :: TestTree
+feedUpdated =
+    testCase "feed and entry carry the post date as updated" $
+        assertBool
+            "updated"
+            ("<updated>2026-01-01</updated>" `textIn` renderAtom testConfig "https://lizi.moe" [postWithTags []])
+
+feedEscaping :: TestTree
+feedEscaping =
+    testCase "titles and bodies are XML-escaped" $ do
+        let feed = renderAtom testConfig "https://lizi.moe" [escapedPost]
+        assertBool "title escaped" ("A &amp; B" `textIn` feed)
+        assertBool "body escaped" ("&lt;p&gt;hi&lt;/p&gt;" `textIn` feed)
+
+feedSummaryShown :: TestTree
+feedSummaryShown =
+    testCase "summary is present when a description exists" $
+        assertBool
+            "summary"
+            ("<summary>desc</summary>" `textIn` renderAtom testConfig "https://lizi.moe" [escapedPost])
+
+feedSummaryHidden :: TestTree
+feedSummaryHidden =
+    testCase "summary is absent without a description" $
+        assertBool
+            "no summary"
+            ("<summary" `notTextIn` renderAtom testConfig "https://lizi.moe" [postWithTags []])
+
+escapedPost :: Post
+escapedPost =
+    (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
+
+testConfig :: SiteConfig
+testConfig =
+    SiteConfig
+        { siteName = "burogu"
+        , siteAuthor = "moe li"
+        , siteDescription = "A test blog"
+        , siteLang = "zh-CN"
+        , siteBaseUrl = Just "https://lizi.moe"
+        , siteTheme = Theme{themeHighlightStyle = "tango"}
+        }
+
 frontmatter :: Text
 frontmatter =
     frontmatterWith
@@ -225,3 +296,6 @@ assertLeft result = assertBool "expected Left" (isLeft result)
 
 textIn :: Text -> Text -> Bool
 textIn needle haystack = needle `T.isInfixOf` haystack
+
+notTextIn :: Text -> Text -> Bool
+notTextIn needle haystack = not (needle `T.isInfixOf` haystack)

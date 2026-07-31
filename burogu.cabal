@@ -14,6 +14,7 @@ executable burogu
     main-is:          Main.hs
     other-modules:    Config
                     , Css
+                    , Feed
                     , Html
                     , Post
                     , Site
@@ -38,6 +39,7 @@ test-suite burogu-test
     main-is:          PostSpec.hs
     other-modules:    Config
                     , Css
+                    , Feed
                     , Html
                     , Post
                     , Site

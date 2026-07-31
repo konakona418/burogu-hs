@@ -1,4 +1,4 @@
-module Html (groupByTag, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl) where
+module Html (groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl) where
 
 import Config (SiteConfig (..))
 import Data.Map.Strict qualified as Map

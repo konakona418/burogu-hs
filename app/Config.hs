@@ -17,6 +17,7 @@ data SiteConfig = SiteConfig
     , siteAuthor :: Text
     , siteDescription :: Text
     , siteLang :: Text
+    , siteBaseUrl :: Maybe Text
     , siteTheme :: Theme
     }
 
@@ -29,6 +30,7 @@ data RawConfig = RawConfig
     , rawAuthor :: Maybe Text
     , rawDescription :: Maybe Text
     , rawLang :: Maybe Text
+    , rawBaseUrl :: Maybe Text
     , rawTheme :: Maybe RawTheme
     }
 
@@ -43,6 +45,7 @@ instance FromJSON RawConfig where
             <*> object .:? "siteAuthor"
             <*> object .:? "siteDescription"
             <*> object .:? "siteLang"
+            <*> object .:? "baseUrl"
             <*> object .:? "theme"
 
 instance FromJSON RawTheme where
@@ -74,14 +77,28 @@ loadConfig path = do
         author <- field "siteAuthor" (rawAuthor raw) (siteAuthor defaults)
         description <- field "siteDescription" (rawDescription raw) (siteDescription defaults)
         lang <- field "siteLang" (rawLang raw) (siteLang defaults)
+        baseUrl <- resolveBaseUrl (rawBaseUrl raw)
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTheme = theme}
 
 field :: Text -> Maybe Text -> Text -> IO Text
 field key Nothing fallback = do
     warn (key <> " is not set in config.yaml; using default: " <> fallback)
     pure fallback
 field _ (Just value) _ = pure value
+
+resolveBaseUrl :: Maybe Text -> IO (Maybe Text)
+resolveBaseUrl Nothing = do
+    warn "baseUrl is not set in config.yaml; feed.xml will not be generated"
+    pure Nothing
+resolveBaseUrl (Just "") = do
+    warn "baseUrl is empty in config.yaml; feed.xml will not be generated"
+    pure Nothing
+resolveBaseUrl (Just raw) =
+    case T.dropWhileEnd (== '/') raw of
+        clean
+            | "http://" `T.isPrefixOf` clean || "https://" `T.isPrefixOf` clean -> pure (Just clean)
+            | otherwise -> die ("invalid baseUrl '" <> raw <> "': must start with http:// or https://")
 
 resolveTheme :: Maybe RawTheme -> IO Theme
 resolveTheme Nothing = do
@@ -109,6 +126,7 @@ defaults =
         , siteAuthor = ""
         , siteDescription = ""
         , siteLang = "zh-CN"
+        , siteBaseUrl = Nothing
         , siteTheme = defaultTheme
         }
 
