@@ -65,6 +65,15 @@ theme:
 - Dark mode via design tokens; themeable through tokens, data hooks (`--tag-count`) and custom CSS/JS
 - Two-phase builds: nothing is written unless every post parses
 
+## Packaging (Arch Linux)
+
+```sh
+git archive --format=tar.gz --prefix=burogu-0.1.0.0/ -o packaging/burogu-0.1.0.0.tar.gz HEAD
+cd packaging && makepkg -i
+```
+
+The PKGBUILD compiles all Haskell dependencies from Hackage in the sandbox (network required). Runtime dependencies are just `gmp` and `zlib`.
+
 ## License
 
 AGPL-3.0-or-later
