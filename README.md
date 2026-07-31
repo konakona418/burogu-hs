@@ -1,24 +1,82 @@
 # burogu
 
-Static blog generator in Haskell.
+A static blog generator written in Haskell.
 
-## Usage
+## Quick start
 
 ```sh
-cabal run burogu          # build site/ from src/
-make dev                  # rebuild on change + local preview (http://127.0.0.1:8000)
-make deploy ARGS="user@host:/path"   # build + rsync to server
-./tool/new-post.sh my-slug [--draft]
+make init                  # create src/ with a sample post (refuses if not empty)
+make dev                   # rebuild on change + preview at http://127.0.0.1:8000
 ```
 
-Posts live in `src/_post/*.md` with YAML frontmatter (`title`, `date`, `tags`, `description`, `draft`). Site config in `config.yaml`.
+## Commands (Makefile)
+
+```sh
+make build                 # build site/ from src/ (cabal run burogu)
+make test                  # run the test suite
+make preview               # build once, then serve site/ at http://127.0.0.1:8000
+make watch                 # rebuild automatically when src/ or config.yaml changes
+make dev                   # watch + preview together (Ctrl-C stops both)
+make clean                 # remove the site/ output directory
+make init                  # initialize an src/ tree
+make new-post              # create a new post
+make deploy                # build + rsync to the server
+make format                # fourmolu on all .hs files
+```
+
+Targets taking arguments pass them through `ARGS`:
+
+```sh
+make init ARGS="mycontent"                 # init into a custom directory
+make new-post ARGS="my-slug --draft"       # draft posts get no date
+make deploy ARGS="user@host:/var/www/site" # overrides .env target
+```
+
+## CLI
+
+```sh
+cabal run burogu -- --help                 # usage and defaults
+cabal run burogu -- [--config PATH] [--src DIR] [--out DIR]
+```
+
+Defaults: `config.yaml`, `src`, `site`. Example: `cabal run burogu -- --src content --out dist`.
+
+## Tool scripts
+
+```sh
+./tool/init-src.sh [dir]                   # initialize src/ structure (default: src)
+./tool/new-post.sh <slug> [--draft]        # create a post from a template
+./tool/watch.sh [--serve PORT]             # auto-rebuild, optionally serve
+./tool/preview.sh [port]                   # build once + serve
+./tool/deploy.sh [user@host:/path]         # build + rsync --delete
+```
+
+Deploy target priority: command-line argument, then `BUROGU_DEPLOY_TARGET` in `.env` (gitignored; see `.env.example`).
+
+## Content
+
+Posts live in `src/_post/*.md` with YAML frontmatter (`title`, `date`, `tags`, `description`, `draft`). Dates may come from the filename prefix (`YYYY-MM-DD-slug.md`) instead of the frontmatter. Everything else under `src/` is copied to the output verbatim; images and other assets are referenced with root-absolute paths (`/img/00/1.png`).
+
+Site configuration in `config.yaml`:
+
+```yaml
+siteName: burogu
+baseUrl: https://example.com
+siteLang: zh-CN
+tagsLabel: Tags
+theme:
+  math: mathjax          # none | mathjax | katex
+  extraCss: [theme.css]  # appended to style.css
+  extraJs: [theme.js]    # deferred <script> on every page
+```
 
 ## Features
 
 - Markdown via pandoc, syntax highlighting, MathJax/KaTeX math
-- Tags, Atom feed, sitemap, Open Graph, dark mode
-- Theme support with design tokens, data hooks, custom CSS/JS
+- Tags, Atom feed, sitemap, robots.txt, custom 404, Open Graph
+- Dark mode via design tokens; themeable through tokens, data hooks (`--tag-count`) and custom CSS/JS
+- Two-phase builds: nothing is written unless every post parses
 
 ## License
 
-AGPL-3.0
+AGPL-3.0-or-later
