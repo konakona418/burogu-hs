@@ -73,6 +73,10 @@ tests =
         , cssTokenTableCompleteness
         , cssGradientRules
         , cssListSpacing
+        , cssMobileBreakpoint
+        , cssOverflowRules
+        , cssSafeArea
+        , viewportFitCover
         , cssExtraCssAppended
         , tagCountHook
         , cliDefaults
@@ -405,6 +409,35 @@ cssListSpacing =
         assertBool "post-item is flex with gap" ("0 var(--space-list-gap)" `textIn` css)
         assertBool "post-meta is flex with gap" (".post-meta" `textIn` css)
         assertBool "tag-item pairs name and count" ("0 6px" `textIn` css)
+
+cssMobileBreakpoint :: TestTree
+cssMobileBreakpoint =
+    testCase "a 600px breakpoint scales tokens down for phones" $ do
+        let css = renderCss []
+        assertBool "media query" ("max-width: 600px" `textIn` css)
+        assertBool "smaller font" ("--font-size" `textIn` css)
+        assertBool "smaller code" ("font-size : 14px" `textIn` css)
+
+cssOverflowRules :: TestTree
+cssOverflowRules =
+    testCase "images and tables cannot overflow the content area" $ do
+        let css = renderCss []
+        assertBool "img constrained" ("max-width : 100%" `textIn` css)
+        assertBool "table scrolls" ("overflow-x : auto" `textIn` css)
+
+cssSafeArea :: TestTree
+cssSafeArea =
+    testCase "body padding accounts for notched-device safe areas" $ do
+        let css = renderCss []
+        assertBool "left inset" ("safe-area-inset-left" `textIn` css)
+        assertBool "right inset" ("safe-area-inset-right" `textIn` css)
+        assertBool "tap highlight removed" ("tap-highlight-color" `textIn` css)
+
+viewportFitCover :: TestTree
+viewportFitCover =
+    testCase "viewport meta opts into full-screen safe areas" $ do
+        let page = renderHtml (renderIndex testConfig Nothing [])
+        assertBool "viewport-fit=cover" ("viewport-fit=cover" `textIn` page)
 
 cssExtraCssAppended :: TestTree
 cssExtraCssAppended =

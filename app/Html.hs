@@ -27,7 +27,7 @@ layout cfg mAbout meta body =
             ( do
                 L.head_ $ do
                     L.meta_ [L.charset_ "utf-8"]
-                    L.meta_ [L.name_ "viewport", L.content_ "width=device-width, initial-scale=1"]
+                    L.meta_ [L.name_ "viewport", L.content_ "width=device-width, initial-scale=1, viewport-fit=cover"]
                     L.meta_ [L.name_ "description", L.content_ (siteDescription cfg)]
                     L.title_ (L.toHtml (pmTitle meta))
                     renderOg cfg meta

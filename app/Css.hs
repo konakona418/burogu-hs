@@ -54,9 +54,32 @@ stylesheet = do
     rootTokens
     darkTokens
     baseRules
+    overflowRules
     listSpacing
+    mobileRules
     tokenRules
     tagGradient
+
+overflowRules :: C.Css
+overflowRules = do
+    C.img C.? do
+        "max-width" C.-: "100%"
+        "height" C.-: "auto"
+    C.table C.? do
+        C.display C.block
+        "overflow-x" C.-: "auto"
+        "max-width" C.-: "100%"
+    C.figure C.? ("max-width" C.-: "100%")
+
+mobileRules :: C.Css
+mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
+    (":root" :: C.Selector) C.? do
+        "--font-size" C.-: "16px"
+        "--line-height" C.-: "24px"
+        "--space-page-top" C.-: "16px"
+        "--space-page-side" C.-: "12px"
+    C.pre C.? ("font-size" C.-: "14px")
+    C.nav C.? C.a C.? ("padding" C.-: "8px 4px")
 
 listSpacing :: C.Css
 listSpacing = do
@@ -117,14 +140,17 @@ darkTokenValues =
 
 baseRules :: C.Css
 baseRules = do
-    C.html C.? ("scrollbar-gutter" C.-: "stable")
+    C.html C.? do
+        "scrollbar-gutter" C.-: "stable"
+        "-webkit-text-size-adjust" C.-: "100%"
+        "-webkit-tap-highlight-color" C.-: "transparent"
     C.body C.? do
         "max-width" C.-: "var(--content-width)"
         C.marginLeft C.auto
         C.marginRight C.auto
         "padding-top" C.-: "var(--space-page-top)"
-        "padding-left" C.-: "var(--space-page-side)"
-        "padding-right" C.-: "var(--space-page-side)"
+        "padding-left" C.-: "calc(var(--space-page-side) + env(safe-area-inset-left, 0px))"
+        "padding-right" C.-: "calc(var(--space-page-side) + env(safe-area-inset-right, 0px))"
         "font-family" C.-: "var(--font-family)"
         "font-size" C.-: "var(--font-size)"
         "line-height" C.-: "var(--line-height)"
