@@ -1,0 +1,59 @@
+cabal-version:   3.0
+name:            burogu
+version:         0.1.0.0
+license:         AGPL-3.0-or-later
+license-file:    LICENSE
+maintainer:      creeperblin@outlook.com
+author:          moe li
+homepage:        lizi.moe
+category:        Web
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
+executable burogu
+    main-is:          Main.hs
+    other-modules:    Config
+                    , Css
+                    , Html
+                    , Post
+                    , Site
+    hs-source-dirs:   app
+    default-language: GHC2021
+    default-extensions: OverloadedStrings
+    ghc-options:      -Wall
+    build-depends:    base ^>=4.18.3.0
+                    , aeson
+                    , clay
+                    , directory
+                    , filepath
+                    , lucid
+                    , pandoc
+                    , pandoc-types
+                    , text
+                    , yaml
+
+test-suite burogu-test
+    type:             exitcode-stdio-1.0
+    main-is:          PostSpec.hs
+    other-modules:    Config
+                    , Css
+                    , Html
+                    , Post
+                    , Site
+    hs-source-dirs:   test
+                    , app
+    default-language: GHC2021
+    default-extensions: OverloadedStrings
+    ghc-options:      -Wall
+    build-depends:    base ^>=4.18.3.0
+                    , aeson
+                    , clay
+                    , directory
+                    , filepath
+                    , lucid
+                    , pandoc
+                    , pandoc-types
+                    , tasty
+                    , tasty-hunit
+                    , text
+                    , yaml
