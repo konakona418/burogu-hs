@@ -1,11 +1,18 @@
 module Css (renderCss) where
 
 import Clay qualified as C
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
+import Text.Pandoc.Highlighting (defaultStyle, highlightingStyles, styleToCss)
 
-renderCss :: Text
-renderCss = TL.toStrict (C.render stylesheet)
+renderCss :: Text -> Text
+renderCss styleName =
+    TL.toStrict (C.render stylesheet) <> "\n" <> highlightCss styleName
+
+highlightCss :: Text -> Text
+highlightCss styleName = T.pack (styleToCss (fromMaybe defaultStyle (lookup styleName highlightingStyles)))
 
 stylesheet :: C.Css
 stylesheet = do
@@ -41,3 +48,4 @@ stylesheet = do
     C.ul C.? C.listStyleType C.none
     C.li C.? C.marginBottom (C.px 8)
     C.nav C.? C.marginBottom (C.px 24)
+    C.nav C.? C.a C.? C.marginRight (C.px 12)

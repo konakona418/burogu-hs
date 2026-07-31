@@ -1,7 +1,8 @@
-module Post (Post (..), loadPosts, parsePost) where
+module Post (Post (..), loadPosts, parsePost, warnCaseTags) where
 
 import Data.Char (isDigit)
-import Data.List (sortOn)
+import Data.List (nub, sortOn)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Ord (Down (..))
 import Data.Text (Text)
@@ -12,6 +13,7 @@ import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
 import Text.Pandoc.Definition (MetaValue (..), Pandoc (..), lookupMeta)
 import Text.Pandoc.Extensions (Extension (..), pandocExtensions)
+import Text.Pandoc.Highlighting (defaultStyle, highlightingStyles)
 import Text.Pandoc.Options (HighlightMethod (..), ReaderOptions (..), WriterOptions (..), def, enableExtension)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
@@ -26,6 +28,7 @@ data Post = Post
     , postDraft :: Bool
     , postBodyHtml :: Text
     }
+    deriving (Eq, Show)
 
 data PostFields = PostFields
     { pfSlug :: Text
@@ -43,30 +46,33 @@ readerOpts =
             enableExtension Ext_autolink_bare_uris (enableExtension Ext_gfm_auto_identifiers pandocExtensions)
         }
 
-writerOpts :: WriterOptions
-writerOpts = def{writerHighlightMethod = NoHighlighting}
+writerOpts :: Text -> WriterOptions
+writerOpts styleName =
+    def
+        { writerHighlightMethod = Skylighting (fromMaybe defaultStyle (lookup styleName highlightingStyles))
+        }
 
-loadPosts :: FilePath -> IO (Either [Text] [Post])
-loadPosts dir = do
+loadPosts :: Text -> FilePath -> IO (Either [Text] [Post])
+loadPosts styleName dir = do
     names <- sortOn id . filter (T.isSuffixOf ".md" . T.pack) <$> listDirectory dir
-    results <- mapM (loadOne dir) names
+    results <- mapM (loadOne styleName dir) names
     let errs = [name <> ": " <> reason | Left (name, reason) <- results]
     if null errs
         then pure (Right (sortPosts [post | Right post <- results, not (postDraft post)]))
         else pure (Left errs)
 
-loadOne :: FilePath -> FilePath -> IO (Either (Text, Text) Post)
-loadOne dir name = do
+loadOne :: Text -> FilePath -> FilePath -> IO (Either (Text, Text) Post)
+loadOne styleName dir name = do
     content <- TIO.readFile (dir </> name)
-    result <- parsePost (dir </> name) content
+    result <- parsePost styleName (dir </> name) content
     pure
         ( case result of
             Left reason -> Left (T.pack name, reason)
             Right post -> Right post
         )
 
-parsePost :: FilePath -> Text -> IO (Either Text Post)
-parsePost path content = do
+parsePost :: Text -> FilePath -> Text -> IO (Either Text Post)
+parsePost styleName path content = do
     edoc <- runIO (readMarkdown readerOpts content)
     case edoc of
         Left err -> pure (Left (T.pack (show err)))
@@ -74,7 +80,7 @@ parsePost path content = do
             case extractMeta name doc of
                 Left err -> pure (Left err)
                 Right fields -> do
-                    ebody <- runIO (writeHtml5String writerOpts doc)
+                    ebody <- runIO (writeHtml5String (writerOpts styleName) doc)
                     pure (either (Left . T.pack . show) (Right . mkPost fields) ebody)
   where
     name = T.pack (takeFileName path)
@@ -107,12 +113,13 @@ extractMeta name (Pandoc meta _) = do
         Nothing -> Right []
         Just (MetaList values) -> mapM tagOf values
         Just _ -> Left "field 'tags' must be a list of strings"
+    validTags <- traverse validateTag tags
     description <- case lookupMeta "description" meta of
         Nothing -> Right Nothing
         Just value -> case metaText value of
             Just t -> Right (Just t)
             Nothing -> Left "field 'description' must be a string"
-    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = tags, pfDescription = description, pfDraft = draft}
+    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft}
 
 mkPost :: PostFields -> Text -> Post
 mkPost fields body =
@@ -153,3 +160,24 @@ metaText _ = Nothing
 
 tagOf :: MetaValue -> Either Text Text
 tagOf value = maybe (Left "field 'tags' must be a list of strings") Right (metaText value)
+
+reservedTagChars :: String
+reservedTagChars = "/?#% "
+
+validateTag :: Text -> Either Text Text
+validateTag tag
+    | T.null (T.strip tag) =
+        Left "tags must not contain empty or whitespace-only values"
+    | T.any (`elem` reservedTagChars) tag =
+        Left ("tag '" <> tag <> "' contains a reserved character (/, ?, #, %, space); percent-encode the tag or use a different one")
+    | otherwise = Right tag
+
+warnCaseTags :: [Post] -> [Text]
+warnCaseTags posts =
+    [ "tags " <> T.intercalate ", " (map quote (nub variants)) <> " differ only in case; consider unifying them"
+    | variants <- Map.elems (Map.fromListWith (++) [(T.toLower tag, [tag]) | tag <- concatMap postTags posts])
+    , nub variants `lengthGreaterThan` 1
+    ]
+  where
+    quote tag = "'" <> tag <> "'"
+    lengthGreaterThan xs n = length xs > n

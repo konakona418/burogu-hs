@@ -23,6 +23,7 @@ executable burogu
     ghc-options:      -Wall
     build-depends:    base ^>=4.18.3.0
                     , aeson
+                    , containers
                     , clay
                     , directory
                     , filepath
@@ -47,6 +48,7 @@ test-suite burogu-test
     ghc-options:      -Wall
     build-depends:    base ^>=4.18.3.0
                     , aeson
+                    , containers
                     , clay
                     , directory
                     , filepath

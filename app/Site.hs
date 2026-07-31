@@ -1,6 +1,6 @@
 module Site (build) where
 
-import Config (SiteConfig)
+import Config (SiteConfig (..), Theme (..))
 import Css (renderCss)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -23,20 +23,37 @@ srcDir = "src"
 outDir = "site"
 postsDir = "posts"
 
-build :: SiteConfig -> [Post] -> IO Int
+build :: SiteConfig -> [Post] -> IO (Int, Int)
 build config posts = do
     removePathForcibly outDir
     createDirectoryIfMissing True outDir
     TIO.writeFile (outDir </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
-    TIO.writeFile (outDir </> "style.css") renderCss
+    TIO.writeFile (outDir </> "style.css") (renderCss (themeHighlightStyle (siteTheme config)))
     mapM_ (writePost config) posts
-    copyStatic
+    writeTagPages config posts
+    nStatic <- copyStatic
+    let nTags = length (H.groupByTag posts)
+    pure (nStatic, nTags)
 
 writePost :: SiteConfig -> Post -> IO ()
 writePost config post = do
     let dir = outDir </> postsDir </> T.unpack (postSlug post)
     createDirectoryIfMissing True dir
     TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config post)))
+
+writeTagPages :: SiteConfig -> [Post] -> IO ()
+writeTagPages config posts = do
+    let groups = H.groupByTag posts
+        tagsDir = outDir </> "tags"
+    createDirectoryIfMissing True tagsDir
+    TIO.writeFile (tagsDir </> "index.html") (TL.toStrict (L.renderText (H.renderTagIndex config groups)))
+    mapM_ (writeTagPage config tagsDir) groups
+
+writeTagPage :: SiteConfig -> FilePath -> (Text, [Post]) -> IO ()
+writeTagPage config tagsDir (tag, posts) = do
+    let dir = tagsDir </> T.unpack tag
+    createDirectoryIfMissing True dir
+    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderTagArchive config tag posts)))
 
 copyStatic :: IO Int
 copyStatic = do

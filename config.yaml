@@ -2,3 +2,5 @@ siteName: burogu
 siteAuthor: moe li
 siteDescription: A blog generated with burogu
 siteLang: zh-CN
+theme:
+  highlightStyle: tango
