@@ -12,7 +12,9 @@ extra-doc-files: CHANGELOG.md
 
 executable burogu
     main-is:          Main.hs
-    other-modules:    Config
+    other-modules:    Cli
+                    , Config
+                    , Paths_burogu
                     , Css
                     , Feed
                     , Html
@@ -29,6 +31,7 @@ executable burogu
                     , directory
                     , filepath
                     , lucid
+                    , optparse-applicative
                     , pandoc
                     , pandoc-types
                     , text
@@ -37,7 +40,9 @@ executable burogu
 test-suite burogu-test
     type:             exitcode-stdio-1.0
     main-is:          PostSpec.hs
-    other-modules:    Config
+    other-modules:    Cli
+                    , Config
+                    , Paths_burogu
                     , Css
                     , Feed
                     , Html
@@ -55,6 +60,7 @@ test-suite burogu-test
                     , directory
                     , filepath
                     , lucid
+                    , optparse-applicative
                     , pandoc
                     , pandoc-types
                     , tasty

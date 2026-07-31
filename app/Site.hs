@@ -1,5 +1,6 @@
-module Site (BuildReport (..), build, postsSrcDir) where
+module Site (BuildReport (..), build) where
 
+import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch, throwIO)
 import Css (renderCss)
@@ -20,11 +21,8 @@ import System.Directory (
  )
 import System.FilePath ((</>))
 
-srcDir, postsSrcDir, outDir, postsDir :: FilePath
-srcDir = "src"
-postsSrcDir = srcDir </> "_post"
-outDir = "site"
-postsDir = "posts"
+postsDirName :: FilePath
+postsDirName = "posts"
 
 data BuildReport = BuildReport
     { brStaticFiles :: Int
@@ -32,44 +30,44 @@ data BuildReport = BuildReport
     , brFeed :: Bool
     }
 
-build :: SiteConfig -> [Post] -> IO BuildReport
-build config posts = do
+build :: Paths -> SiteConfig -> [Post] -> IO BuildReport
+build paths config posts = do
     report <-
-        buildWork config posts `catch` \(e :: IOException) -> do
-            removePathForcibly outDir
+        buildWork paths config posts `catch` \(e :: IOException) -> do
+            removePathForcibly (pOut paths)
             throwIO e
     pure report
 
-buildWork :: SiteConfig -> [Post] -> IO BuildReport
-buildWork config posts = do
-    removePathForcibly outDir
-    createDirectoryIfMissing True outDir
-    TIO.writeFile (outDir </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
-    writeStyleSheet config
-    mapM_ (writePost config) posts
-    writeTagPages config posts
-    brFeed <- writeFeed config posts
-    nStatic <- copyStatic
+buildWork :: Paths -> SiteConfig -> [Post] -> IO BuildReport
+buildWork paths config posts = do
+    removePathForcibly (pOut paths)
+    createDirectoryIfMissing True (pOut paths)
+    TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
+    writeStyleSheet paths config
+    mapM_ (writePost paths config) posts
+    writeTagPages paths config posts
+    brFeed <- writeFeed paths config posts
+    nStatic <- copyStatic paths
     pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed}
 
-writeStyleSheet :: SiteConfig -> IO ()
-writeStyleSheet config = do
+writeStyleSheet :: Paths -> SiteConfig -> IO ()
+writeStyleSheet paths config = do
     extra <- mapM (readExtraCss . T.unpack) (themeExtraCss (siteTheme config))
-    TIO.writeFile (outDir </> "style.css") (renderCss extra)
+    TIO.writeFile (pOut paths </> "style.css") (renderCss extra)
   where
     readExtraCss :: FilePath -> IO Text
-    readExtraCss file = TIO.readFile (srcDir </> file)
+    readExtraCss file = TIO.readFile (pSrc paths </> file)
 
-writePost :: SiteConfig -> Post -> IO ()
-writePost config post = do
-    let dir = outDir </> postsDir </> T.unpack (postSlug post)
+writePost :: Paths -> SiteConfig -> Post -> IO ()
+writePost paths config post = do
+    let dir = pOut paths </> postsDirName </> T.unpack (postSlug post)
     createDirectoryIfMissing True dir
     TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config post)))
 
-writeTagPages :: SiteConfig -> [Post] -> IO ()
-writeTagPages config posts = do
+writeTagPages :: Paths -> SiteConfig -> [Post] -> IO ()
+writeTagPages paths config posts = do
     let groups = H.groupByTag posts
-        tagsDir = outDir </> T.unpack (T.dropWhile (== '/') (T.dropWhileEnd (== '/') H.tagUrlPrefix))
+        tagsDir = pOut paths </> T.unpack (T.dropWhile (== '/') (T.dropWhileEnd (== '/') H.tagUrlPrefix))
     createDirectoryIfMissing True tagsDir
     TIO.writeFile (tagsDir </> "index.html") (TL.toStrict (L.renderText (H.renderTagIndex config groups)))
     mapM_ (writeTagPage config tagsDir) groups
@@ -80,20 +78,20 @@ writeTagPage config tagsDir (tag, posts) = do
     createDirectoryIfMissing True dir
     TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderTagArchive config tag posts)))
 
-writeFeed :: SiteConfig -> [Post] -> IO Bool
-writeFeed config posts =
+writeFeed :: Paths -> SiteConfig -> [Post] -> IO Bool
+writeFeed paths config posts =
     case siteBaseUrl config of
         Just baseUrl
             | not (null posts) -> do
-                TIO.writeFile (outDir </> "feed.xml") (renderAtom config baseUrl posts)
+                TIO.writeFile (pOut paths </> "feed.xml") (renderAtom config baseUrl posts)
                 pure True
         _ -> pure False
 
-copyStatic :: IO Int
-copyStatic = do
-    entries <- listDirectory srcDir
+copyStatic :: Paths -> IO Int
+copyStatic paths = do
+    entries <- listDirectory (pSrc paths)
     let others = filter (/= "_post") entries
-    mapM_ (copyTree srcDir outDir) others
+    mapM_ (copyTree (pSrc paths) (pOut paths)) others
     pure (length others)
 
 copyTree :: FilePath -> FilePath -> FilePath -> IO ()

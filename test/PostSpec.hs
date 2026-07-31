@@ -1,5 +1,6 @@
 module Main where
 
+import Cli (Paths (..), pathsInfo)
 import Config (SiteConfig (..), Theme (..))
 import Css (TokenColor (..), renderCss, tokenColors)
 import Data.Either (isLeft)
@@ -10,6 +11,7 @@ import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
 import Html (groupByTag, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
+import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
@@ -67,6 +69,9 @@ tests =
         , cssGradientRules
         , cssExtraCssAppended
         , tagCountHook
+        , cliDefaults
+        , cliOverrides
+        , cliInvalidArg
         ]
 
 fullFrontmatter :: TestTree
@@ -383,6 +388,39 @@ tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
         let page = renderHtml (renderTagIndex testConfig [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
+
+cliDefaults :: TestTree
+cliDefaults =
+    testCase "paths default to config.yaml, src, site" $ do
+        let result = execParserPure defaultPrefs pathsInfo []
+        case result of
+            Success paths -> do
+                assertEqual "config" "config.yaml" (pConfig paths)
+                assertEqual "src" "src" (pSrc paths)
+                assertEqual "out" "site" (pOut paths)
+            Failure err -> assertBool ("expected success, got: " <> show err) False
+            CompletionInvoked _ -> assertBool "unexpected completion" False
+
+cliOverrides :: TestTree
+cliOverrides =
+    testCase "paths are overridden by flags" $ do
+        let result = execParserPure defaultPrefs pathsInfo ["--config", "cfg.yaml", "--src", "content", "--out", "dist"]
+        case result of
+            Success paths -> do
+                assertEqual "config" "cfg.yaml" (pConfig paths)
+                assertEqual "src" "content" (pSrc paths)
+                assertEqual "out" "dist" (pOut paths)
+            Failure err -> assertBool ("expected success, got: " <> show err) False
+            CompletionInvoked _ -> assertBool "unexpected completion" False
+
+cliInvalidArg :: TestTree
+cliInvalidArg =
+    testCase "unknown flags are rejected" $ do
+        let result = execParserPure defaultPrefs pathsInfo ["--nope"]
+        case result of
+            Failure _ -> assertBool "rejected" True
+            Success _ -> assertBool "should have failed" False
+            CompletionInvoked _ -> assertBool "should have failed" False
 
 escapedPost :: Post
 escapedPost =
