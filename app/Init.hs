@@ -8,11 +8,29 @@ import Data.Word (Word8)
 import System.Directory (
     createDirectoryIfMissing,
     doesDirectoryExist,
+    doesFileExist,
     listDirectory,
  )
 import System.Exit (exitFailure)
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
 import System.IO (stderr)
+
+configTemplate :: Text
+configTemplate =
+    T.unlines
+        [ "siteName: burogu"
+        , "baseUrl: https://example.com"
+        , "siteAuthor: Your Name"
+        , "siteDescription: A blog generated with burogu"
+        , "siteLang: zh-CN"
+        , "tagsLabel: Tags"
+        , "# deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`"
+        , "# srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`"
+        , "theme:"
+        , "  math: mathjax          # none | mathjax | katex"
+        , "  extraCss: [theme.css]"
+        , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
+        ]
 
 samplePost :: Text
 samplePost =
@@ -164,9 +182,18 @@ run target = do
         BS.writeFile (target </> "img" </> "00" </> "1.png") (BS.pack pngBytes)
         TIO.writeFile (target </> "CNAME") "example.com\n"
         TIO.writeFile (target </> "theme.css") themeCss
+        writeConfig
         TIO.putStrLn ("initialized " <> T.pack target <> ":")
         TIO.putStrLn ("  " <> T.pack target <> "/_post/2026-07-31-hello-world.md")
         TIO.putStrLn ("  " <> T.pack target <> "/img/00/1.png")
         TIO.putStrLn ("  " <> T.pack target <> "/CNAME")
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"
+    writeConfig = do
+        let configPath = takeDirectory target </> "config.yaml"
+        already <- doesFileExist configPath
+        if already
+            then TIO.putStrLn ("  " <> T.pack configPath <> " (already exists, left untouched)")
+            else do
+                TIO.writeFile configPath configTemplate
+                TIO.putStrLn ("  " <> T.pack configPath)

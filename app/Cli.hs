@@ -123,7 +123,7 @@ targetParser =
     optional
         ( strArgument
             ( metavar "TARGET"
-                <> help "rsync target like user@host:/path (defaults to BUROGU_DEPLOY_TARGET)"
+                <> help "rsync target like user@host:/path (defaults to deployTarget in config.yaml)"
             )
         )
 
@@ -135,7 +135,7 @@ repoParser =
     optional
         ( strArgument
             ( metavar "REPO"
-                <> help "git repo URL (defaults to BUROGU_SRC_REPO)"
+                <> help "git repo URL (defaults to srcRepo in config.yaml)"
             )
         )
 

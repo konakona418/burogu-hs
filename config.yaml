@@ -4,6 +4,8 @@ siteAuthor: moe li
 siteDescription: A blog generated with burogu
 siteLang: zh-CN
 tagsLabel: Tags
+# deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`
+# srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`
 theme:
   math: mathjax
   extraCss: [theme.css]

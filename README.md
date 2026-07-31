@@ -15,7 +15,7 @@ cabal run burogu -- deploy [user@host:/path]     # build + rsync to server
 cabal run burogu -- sync [push|pull] [repo]      # sync src/ with a git repo
 ```
 
-Posts live in `src/_post/*.md` with YAML frontmatter (`title`, `date`, `tags`, `description`, `draft`); everything else under `src/` is copied verbatim. Optional `src/about.md` and `src/404.md` customize the about page (with a nav link) and the 404 page. Site configuration in `config.yaml`.
+Posts live in `src/_post/*.md` with YAML frontmatter (`title`, `date`, `tags`, `description`, `draft`); everything else under `src/` is copied verbatim. Optional `src/about.md` and `src/404.md` customize the about page (with a nav link) and the 404 page. Site configuration in `config.yaml` (`init` writes a template to the directory above `src`); optional `deployTarget` and `srcRepo` fields give `deploy`/`sync` their targets.
 
 ## License
 

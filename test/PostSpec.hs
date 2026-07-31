@@ -651,6 +651,8 @@ testConfig =
         , siteBaseUrl = Just "https://lizi.moe"
         , siteTagsLabel = "Tags"
         , siteCopyright = "© moe li"
+        , siteDeployTarget = Nothing
+        , siteSrcRepo = Nothing
         , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
         }
 

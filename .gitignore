@@ -16,8 +16,5 @@
 /_TODO.md
 /_THEME.md
 
-# secrets
-/.env
-
 # editor
 *.swp

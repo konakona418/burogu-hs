@@ -1,5 +1,7 @@
 module Sync (run) where
 
+import Cli (Paths (..), defaultPaths)
+import Config (SiteConfig (..), loadConfig)
 import Control.Exception (bracket)
 import Control.Monad (unless)
 import Data.Text (Text)
@@ -8,7 +10,6 @@ import Data.Text.IO qualified as TIO
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Time.LocalTime (getCurrentTimeZone, utcToLocalTime)
-import Env (envValue)
 import System.Directory (
     copyFile,
     createDirectory,
@@ -24,11 +25,12 @@ import System.Process (cwd, proc, readCreateProcessWithExitCode)
 
 run :: Text -> Maybe Text -> IO ()
 run action mRepo = do
-    repo <- maybe (envValue "BUROGU_SRC_REPO") (pure . Just) mRepo
+    config <- loadConfig (pConfig defaultPaths)
+    let repo = maybe (siteSrcRepo config) Just mRepo
     case repo of
         Nothing -> do
             TIO.hPutStrLn stderr "error: no repo URL."
-            TIO.hPutStrLn stderr "usage: cabal run burogu -- sync [push|pull] [repo-url]  or set BUROGU_SRC_REPO in .env"
+            TIO.hPutStrLn stderr "usage: cabal run burogu -- sync [push|pull] [repo-url]  or set srcRepo in config.yaml"
             exitFailure
         Just r -> case action of
             "pull" -> pull r
