@@ -117,6 +117,7 @@ darkTokenValues =
 
 baseRules :: C.Css
 baseRules = do
+    C.html C.? ("scrollbar-gutter" C.-: "stable")
     C.body C.? do
         "max-width" C.-: "var(--content-width)"
         C.marginLeft C.auto
