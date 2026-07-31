@@ -1,7 +1,23 @@
+# build artifacts
 /dist-newstyle
 /site
+/packaging/*.tar.gz
+/packaging/*.pkg.tar.zst
+/packaging/pkg/
+/packaging/src/
+
+# toolchain
+.ghc.environment.*
+
+# content (initialize with `make init` / `burogu init`)
 /src
+
+# internal docs (not shipped)
 /_TODO.md
 /_THEME.md
+
+# secrets
 /.env
-/packaging/*.tar.gz
+
+# editor
+*.swp

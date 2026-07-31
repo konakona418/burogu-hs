@@ -1,5 +1,7 @@
 module Deploy (run) where
 
+import Build (runBuild)
+import Cli (defaultPaths)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -17,5 +19,5 @@ run mTarget = do
             TIO.hPutStrLn stderr "usage: cabal run burogu -- deploy <user@host:/path>  or set BUROGU_DEPLOY_TARGET in .env"
             exitFailure
         Just t -> do
-            callProcess "cabal" ["run", "burogu", "--", "build"]
+            runBuild defaultPaths
             callProcess "rsync" ["-avz", "--delete", "site/", T.unpack t <> "/"]

@@ -11,8 +11,10 @@
 #   makepkg -d -i
 #
 # The build compiles all Haskell dependencies from Hackage inside the
-# sandbox (network required); runtime dependencies are just gmp and zlib
-# (confirmed with ldd on the release binary).
+# sandbox (network required). Runtime dependencies: gmp and zlib (linked
+# by the binary), rsync (deploy), git (sync). No cabal or python3 are
+# needed at runtime: preview/watch build in-process and serve with a
+# built-in HTTP server.
 
 pkgname=burogu
 pkgver=0.1.0.0
@@ -21,7 +23,7 @@ pkgdesc="A static blog generator written in Haskell"
 arch=('x86_64')
 url="https://lizi.moe"
 license=('AGPL-3.0-or-later')
-depends=('gmp' 'zlib')
+depends=('gmp' 'zlib' 'rsync' 'git')
 makedepends=('ghc' 'cabal-install')
 # sha256sums is SKIP for the local tarball; fill it in when publishing
 # to the AUR.

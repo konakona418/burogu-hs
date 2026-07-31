@@ -1,4 +1,4 @@
-module Cli (Command (..), Paths (..), parseCommand, cliInfo) where
+module Cli (Command (..), Paths (..), defaultPaths, parseCommand, cliInfo) where
 
 import Data.Text (Text)
 import Data.Version (showVersion)
@@ -10,6 +10,9 @@ data Paths = Paths
     , pSrc :: FilePath
     , pOut :: FilePath
     }
+
+defaultPaths :: Paths
+defaultPaths = Paths{pConfig = "config.yaml", pSrc = "src", pOut = "site"}
 
 data Command
     = Build {cPaths :: Paths}

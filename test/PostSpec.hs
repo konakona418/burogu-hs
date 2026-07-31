@@ -3,10 +3,12 @@ module Main where
 import Cli (Command (..), Paths (..), cliInfo)
 import Config (SiteConfig (..), Theme (..))
 import Css (TokenColor (..), renderCss, tokenColors)
+import Data.ByteString qualified as BS
 import Data.Either (isLeft)
 import Data.List (sort)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
 import Html (groupByTag, render404, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
@@ -17,6 +19,7 @@ import Sitemap (renderSitemap)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
+import Watch (contentType, parsePath, resolveFile)
 
 main :: IO ()
 main = defaultMain tests
@@ -79,6 +82,9 @@ tests =
         , robotsContent
         , notFoundPage
         , extraJsInjected
+        , serverParsePath
+        , serverResolveFile
+        , serverContentType
         ]
 
 fullFrontmatter :: TestTree
@@ -484,6 +490,29 @@ extraJsInjected =
         let page = renderHtml (renderIndex jsConfig [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
         assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig []))
+
+serverParsePath :: TestTree
+serverParsePath =
+    testCase "preview server parses GET paths with percent-decoding" $ do
+        assertEqual "simple" (Just "/style.css") (parsePath "GET /style.css HTTP/1.1\r\nHost: x")
+        assertEqual "query stripped" (Just "/tags/") (parsePath "GET /tags/?x=1 HTTP/1.1\r\n")
+        assertEqual "percent-decoded" (Just ("/posts/" <> encodeUtf8 "你好" <> "/")) (parsePath "GET /posts/%E4%BD%A0%E5%A5%BD/ HTTP/1.1\r\n")
+        assertEqual "non-GET rejected" Nothing (parsePath "POST / HTTP/1.1\r\n")
+
+serverResolveFile :: TestTree
+serverResolveFile =
+    testCase "preview server resolves paths against the output directory" $ do
+        assertEqual "root" (Just "site/index.html") (resolveFile "site" "/")
+        assertEqual "directory URL" (Just "site/posts/hello/index.html") (resolveFile "site" "/posts/hello/")
+        assertEqual "file" (Just "site/img/00/1.png") (resolveFile "site" "/img/00/1.png")
+        assertEqual "traversal rejected" Nothing (resolveFile "site" "/../etc/passwd")
+
+serverContentType :: TestTree
+serverContentType =
+    testCase "preview server maps file extensions to content types" $ do
+        assertEqual "html" "text/html; charset=utf-8" (contentType "index.html")
+        assertEqual "css" "text/css; charset=utf-8" (contentType "style.css")
+        assertEqual "png" "image/png" (contentType "1.png")
 
 escapedPost :: Post
 escapedPost =

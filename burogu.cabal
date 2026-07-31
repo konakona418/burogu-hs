@@ -11,7 +11,8 @@ build-type:      Simple
 
 executable burogu
     main-is:          Main.hs
-    other-modules:    Cli
+    other-modules:    Build
+                    , Cli
                     , Config
                     , Css
                     , Deploy
@@ -38,6 +39,7 @@ executable burogu
                     , filepath
                     , bytestring
                     , lucid
+                    , network
                     , optparse-applicative
                     , pandoc
                     , pandoc-types
@@ -49,7 +51,8 @@ executable burogu
 test-suite burogu-test
     type:             exitcode-stdio-1.0
     main-is:          PostSpec.hs
-    other-modules:    Cli
+    other-modules:    Build
+                    , Cli
                     , Config
                     , Css
                     , Deploy
@@ -77,6 +80,7 @@ test-suite burogu-test
                     , filepath
                     , bytestring
                     , lucid
+                    , network
                     , optparse-applicative
                     , pandoc
                     , pandoc-types
