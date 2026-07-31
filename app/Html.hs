@@ -114,7 +114,7 @@ renderTagIndex cfg groups = layout cfg pageMeta $ L.ul_ [L.class_ "tag-list"] (m
     pageMeta = PageMeta{pmTitle = siteTagsLabel cfg, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
     item :: (Text, [Post]) -> L.Html ()
     item (tag, posts) =
-        L.li_ [L.class_ "tag-item"] $ do
+        L.li_ [L.class_ "tag-item", LB.makeAttribute "style" ("--tag-count: " <> T.pack (show (length posts)))] $ do
             L.a_ [L.class_ "tag-name", L.href_ (tagUrl tag)] (L.toHtml tag)
             L.span_ [L.class_ "tag-count"] (L.toHtml ("(" <> T.pack (show (length posts)) <> ")"))
 

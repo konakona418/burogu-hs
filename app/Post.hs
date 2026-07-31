@@ -13,7 +13,7 @@ import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
 import Text.Pandoc.Definition (Inline (..), MetaValue (..), Pandoc (..), lookupMeta)
 import Text.Pandoc.Extensions (Extension (..), pandocExtensions)
-import Text.Pandoc.Highlighting (defaultStyle, highlightingStyles)
+import Text.Pandoc.Highlighting (defaultStyle)
 import Text.Pandoc.Options (HTMLMathMethod (..), HighlightMethod (..), ReaderOptions (..), WriterOptions (..), def, defaultKaTeXURL, defaultMathJaxURL, enableExtension)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
@@ -49,10 +49,10 @@ readerOpts =
             enableExtension Ext_autolink_bare_uris (enableExtension Ext_gfm_auto_identifiers pandocExtensions)
         }
 
-writerOpts :: Text -> HTMLMathMethod -> WriterOptions
-writerOpts styleName math =
+writerOpts :: HTMLMathMethod -> WriterOptions
+writerOpts math =
     def
-        { writerHighlightMethod = Skylighting (fromMaybe defaultStyle (lookup styleName highlightingStyles))
+        { writerHighlightMethod = Skylighting defaultStyle
         , writerHTMLMathMethod = math
         }
 
@@ -62,27 +62,27 @@ mathMethod "mathjax" url = MathJax (fromMaybe defaultMathJaxURL url)
 mathMethod "katex" url = KaTeX (fromMaybe defaultKaTeXURL url)
 mathMethod _ _ = PlainMath
 
-loadPosts :: Text -> HTMLMathMethod -> FilePath -> IO (Either [Text] [Post])
-loadPosts styleName math dir = do
+loadPosts :: HTMLMathMethod -> FilePath -> IO (Either [Text] [Post])
+loadPosts math dir = do
     names <- sortOn id . filter (T.isSuffixOf ".md" . T.pack) <$> listDirectory dir
-    results <- mapM (loadOne styleName math dir) names
+    results <- mapM (loadOne math dir) names
     let errs = [name <> ": " <> reason | Left (name, reason) <- results]
     if null errs
         then pure (Right (sortPosts [post | Right post <- results, not (postDraft post)]))
         else pure (Left errs)
 
-loadOne :: Text -> HTMLMathMethod -> FilePath -> FilePath -> IO (Either (Text, Text) Post)
-loadOne styleName math dir name = do
+loadOne :: HTMLMathMethod -> FilePath -> FilePath -> IO (Either (Text, Text) Post)
+loadOne math dir name = do
     content <- TIO.readFile (dir </> name)
-    result <- parsePost styleName math (dir </> name) content
+    result <- parsePost math (dir </> name) content
     pure
         ( case result of
             Left reason -> Left (T.pack name, reason)
             Right post -> Right post
         )
 
-parsePost :: Text -> HTMLMathMethod -> FilePath -> Text -> IO (Either Text Post)
-parsePost styleName math path content = do
+parsePost :: HTMLMathMethod -> FilePath -> Text -> IO (Either Text Post)
+parsePost math path content = do
     edoc <- runIO (readMarkdown readerOpts content)
     case edoc of
         Left err -> pure (Left (T.pack (show err)))
@@ -90,7 +90,7 @@ parsePost styleName math path content = do
             case extractMeta name doc of
                 Left err -> pure (Left err)
                 Right fields -> do
-                    ebody <- runIO (writeHtml5String (writerOpts styleName math) doc)
+                    ebody <- runIO (writeHtml5String (writerOpts math) doc)
                     pure (either (Left . T.pack . show) (Right . mkPost fields) ebody)
   where
     name = T.pack (takeFileName path)

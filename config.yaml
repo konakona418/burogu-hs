@@ -5,5 +5,5 @@ siteDescription: A blog generated with burogu
 siteLang: zh-CN
 tagsLabel: Tags
 theme:
-  highlightStyle: tango
   math: mathjax
+  extraCss: [theme.css]

@@ -12,10 +12,8 @@ import System.IO (stderr)
 main :: IO ()
 main = do
     config <- loadConfig "config.yaml"
-    let theme = siteTheme config
-        styleName = themeHighlightStyle theme
-        math = mathMethod (themeMath theme) (themeMathUrl theme)
-    eposts <- loadPosts styleName math postsSrcDir `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])
+    let math = mathMethod (themeMath (siteTheme config)) (themeMathUrl (siteTheme config))
+    eposts <- loadPosts math postsSrcDir `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])
     case eposts of
         Left errs -> do
             TIO.hPutStrLn stderr "Build failed. The following problems were found:"

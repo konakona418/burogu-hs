@@ -45,12 +45,20 @@ buildWork config posts = do
     removePathForcibly outDir
     createDirectoryIfMissing True outDir
     TIO.writeFile (outDir </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
-    TIO.writeFile (outDir </> "style.css") (renderCss (themeHighlightStyle (siteTheme config)))
+    writeStyleSheet config
     mapM_ (writePost config) posts
     writeTagPages config posts
     brFeed <- writeFeed config posts
     nStatic <- copyStatic
     pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed}
+
+writeStyleSheet :: SiteConfig -> IO ()
+writeStyleSheet config = do
+    extra <- mapM (readExtraCss . T.unpack) (themeExtraCss (siteTheme config))
+    TIO.writeFile (outDir </> "style.css") (renderCss extra)
+  where
+    readExtraCss :: FilePath -> IO Text
+    readExtraCss file = TIO.readFile (srcDir </> file)
 
 writePost :: SiteConfig -> Post -> IO ()
 writePost config post = do

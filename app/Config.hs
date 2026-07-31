@@ -2,6 +2,7 @@ module Config (SiteConfig (..), Theme (..), loadConfig) where
 
 import Control.Exception (IOException, catch)
 import Data.Aeson (FromJSON (..), withObject, (.:?))
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -10,7 +11,6 @@ import Data.Yaml (decodeEither', prettyPrintParseException)
 import System.Exit (exitFailure)
 import System.IO (stderr)
 import System.IO.Error (isDoesNotExistError)
-import Text.Pandoc.Highlighting (highlightingStyles)
 
 data SiteConfig = SiteConfig
     { siteName :: Text
@@ -23,9 +23,9 @@ data SiteConfig = SiteConfig
     }
 
 data Theme = Theme
-    { themeHighlightStyle :: Text
-    , themeMath :: Text
+    { themeMath :: Text
     , themeMathUrl :: Maybe Text
+    , themeExtraCss :: [Text]
     }
 
 data RawConfig = RawConfig
@@ -39,9 +39,9 @@ data RawConfig = RawConfig
     }
 
 data RawTheme = RawTheme
-    { rawHighlightStyle :: Maybe Text
-    , rawMath :: Maybe Text
+    { rawMath :: Maybe Text
     , rawMathUrl :: Maybe Text
+    , rawExtraCss :: Maybe [Text]
     }
 
 instance FromJSON RawConfig where
@@ -58,9 +58,9 @@ instance FromJSON RawConfig where
 instance FromJSON RawTheme where
     parseJSON = withObject "theme" $ \object ->
         RawTheme
-            <$> object .:? "highlightStyle"
-            <*> object .:? "math"
+            <$> object .:? "math"
             <*> object .:? "mathUrl"
+            <*> object .:? "extraCss"
 
 loadConfig :: FilePath -> IO SiteConfig
 loadConfig path = do
@@ -75,9 +75,9 @@ loadConfig path = do
                 warn ("  siteLang        = " <> siteLang defaults)
                 warn "  baseUrl         = (not set)"
                 warn ("  tagsLabel       = " <> siteTagsLabel defaults)
-                warn ("  theme           = " <> themeHighlightStyle (siteTheme defaults))
                 warn ("    math          = " <> themeMath (siteTheme defaults))
                 warn "    mathUrl       = (not set)"
+                warn "    extraCss      = (none)"
                 pure defaults
             | otherwise -> die ("cannot read config.yaml: " <> T.pack (show e))
         Right content ->
@@ -117,19 +117,11 @@ resolveBaseUrl (Just raw) =
 resolveTheme :: Maybe RawTheme -> IO Theme
 resolveTheme Nothing = do
     warn "theme is not set in config.yaml; using default:"
-    warn ("  highlightStyle = " <> defaultHighlightStyle)
-    warn ("  math           = " <> defaultMathMethod)
-    warn "  mathUrl        = (not set)"
+    warn ("  math      = " <> defaultMathMethod)
+    warn "  mathUrl   = (not set)"
+    warn "  extraCss  = (none)"
     pure defaultTheme
 resolveTheme (Just raw) = do
-    style <- case rawHighlightStyle raw of
-        Nothing -> do
-            warn "theme.highlightStyle is not set in config.yaml; using default: tango"
-            pure defaultHighlightStyle
-        Just s -> pure s
-    case lookup style highlightingStyles of
-        Just _ -> pure ()
-        Nothing -> die (availableStyles style)
     math <- case rawMath raw of
         Nothing -> do
             warn "theme.math is not set in config.yaml; using default: mathjax"
@@ -139,7 +131,8 @@ resolveTheme (Just raw) = do
         then pure ()
         else die ("unknown math method '" <> math <> "'. Available methods: " <> T.intercalate ", " validMathMethods)
     mathUrl <- resolveMathUrl math (rawMathUrl raw)
-    pure Theme{themeHighlightStyle = style, themeMath = math, themeMathUrl = mathUrl}
+    let extraCss = fromMaybe [] (rawExtraCss raw)
+    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss}
 
 resolveMathUrl :: Text -> Maybe Text -> IO (Maybe Text)
 resolveMathUrl "none" (Just _) = do
@@ -158,10 +151,6 @@ resolveMathUrl _ (Just raw)
 validMathMethods :: [Text]
 validMathMethods = ["none", "mathjax", "katex"]
 
-availableStyles :: Text -> Text
-availableStyles style =
-    "unknown highlight style '" <> style <> "'. Available styles:\n  " <> T.intercalate ", " (map fst highlightingStyles)
-
 defaults :: SiteConfig
 defaults =
     SiteConfig
@@ -175,10 +164,7 @@ defaults =
         }
 
 defaultTheme :: Theme
-defaultTheme = Theme{themeHighlightStyle = defaultHighlightStyle, themeMath = defaultMathMethod, themeMathUrl = Nothing}
-
-defaultHighlightStyle :: Text
-defaultHighlightStyle = "tango"
+defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = []}
 
 defaultMathMethod :: Text
 defaultMathMethod = "mathjax"
