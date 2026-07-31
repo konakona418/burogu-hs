@@ -17,6 +17,7 @@ import System.Directory (
     copyFile,
     createDirectoryIfMissing,
     doesDirectoryExist,
+    doesFileExist,
     listDirectory,
     removePathForcibly,
  )
@@ -42,6 +43,7 @@ build paths config posts = do
 
 buildWork :: Paths -> SiteConfig -> [Post] -> IO BuildReport
 buildWork paths config posts = do
+    validateExtraJs paths config
     removePathForcibly (pOut paths)
     createDirectoryIfMissing True (pOut paths)
     TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
@@ -62,6 +64,17 @@ writeStyleSheet paths config = do
   where
     readExtraCss :: FilePath -> IO Text
     readExtraCss file = TIO.readFile (pSrc paths </> file)
+
+validateExtraJs :: Paths -> SiteConfig -> IO ()
+validateExtraJs paths config =
+    mapM_ check (themeExtraJs (siteTheme config))
+  where
+    check :: Text -> IO ()
+    check file = do
+        exists <- doesFileExist (pSrc paths </> T.unpack file)
+        if exists
+            then pure ()
+            else ioError (userError ("extra JS file not found in " <> pSrc paths <> ": " <> T.unpack file))
 
 writePost :: Paths -> SiteConfig -> Post -> IO ()
 writePost paths config post = do

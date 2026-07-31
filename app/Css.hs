@@ -1,6 +1,7 @@
 module Css (TokenColor (..), renderCss, tokenColors) where
 
 import Clay qualified as C
+import Clay.Flexbox qualified as CF
 import Clay.Media qualified as CM
 import Data.Text (Text)
 import Data.Text.Lazy qualified as TL
@@ -53,8 +54,26 @@ stylesheet = do
     rootTokens
     darkTokens
     baseRules
+    listSpacing
     tokenRules
     tagGradient
+
+listSpacing :: C.Css
+listSpacing = do
+    (".post-item" :: C.Selector) C.? do
+        C.display C.flex
+        C.flexWrap CF.wrap
+        "gap" C.-: "0 var(--space-list-gap)"
+        "align-items" C.-: "baseline"
+    (".post-item .post-desc" :: C.Selector) C.? ("flex-basis" C.-: "100%")
+    (".post-meta" :: C.Selector) C.? do
+        C.display C.flex
+        "gap" C.-: "0 var(--space-list-gap)"
+        "align-items" C.-: "baseline"
+    (".tag-item" :: C.Selector) C.? do
+        C.display C.flex
+        "gap" C.-: "0 6px"
+        "align-items" C.-: "baseline"
 
 rootTokens :: C.Css
 rootTokens = (":root" :: C.Selector) C.? mapM_ emit baseTokens

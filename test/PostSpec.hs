@@ -68,6 +68,7 @@ tests =
         , cssTokenRules
         , cssTokenTableCompleteness
         , cssGradientRules
+        , cssListSpacing
         , cssExtraCssAppended
         , tagCountHook
         , cliDefaults
@@ -77,6 +78,7 @@ tests =
         , sitemapLastmod
         , robotsContent
         , notFoundPage
+        , extraJsInjected
         ]
 
 fullFrontmatter :: TestTree
@@ -382,6 +384,14 @@ cssGradientRules =
         assertBool "hue computation" ("var(--tag-count)" `textIn` css)
         assertBool "hsl usage" ("hsl(var(--tag-hue)" `textIn` css)
 
+cssListSpacing :: TestTree
+cssListSpacing =
+    testCase "list items space out date, title and tags" $ do
+        let css = renderCss []
+        assertBool "post-item is flex with gap" ("0 var(--space-list-gap)" `textIn` css)
+        assertBool "post-meta is flex with gap" (".post-meta" `textIn` css)
+        assertBool "tag-item pairs name and count" ("0 6px" `textIn` css)
+
 cssExtraCssAppended :: TestTree
 cssExtraCssAppended =
     testCase "user CSS is appended after the generated rules" $ do
@@ -465,6 +475,14 @@ robotsText baseUrl =
         <> "Allow: /\n"
         <> maybe "" (\b -> "Sitemap: " <> b <> "/sitemap.xml\n") baseUrl
 
+extraJsInjected :: TestTree
+extraJsInjected =
+    testCase "extra JS files are injected as deferred scripts on every page" $ do
+        let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
+        let page = renderHtml (renderIndex jsConfig [])
+        assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig []))
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -509,7 +527,7 @@ testConfig =
         , siteLang = "zh-CN"
         , siteBaseUrl = Just "https://lizi.moe"
         , siteTagsLabel = "Tags"
-        , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = []}
+        , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
         }
 
 frontmatter :: Text

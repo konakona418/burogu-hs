@@ -7,3 +7,4 @@ tagsLabel: Tags
 theme:
   math: mathjax
   extraCss: [theme.css]
+  # extraJs: [theme.js]    # optional: JS files under src/ loaded as deferred scripts on every page

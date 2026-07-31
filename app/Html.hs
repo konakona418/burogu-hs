@@ -31,6 +31,7 @@ layout cfg meta body =
                     L.title_ (L.toHtml (pmTitle meta))
                     renderOg cfg meta
                     renderMath cfg meta
+                    renderExtraJs cfg
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
@@ -64,6 +65,12 @@ renderMath cfg meta =
   where
     theme = siteTheme cfg
     katexBase = fromMaybe defaultKaTeXURL (themeMathUrl theme)
+
+renderExtraJs :: SiteConfig -> L.Html ()
+renderExtraJs cfg = mapM_ scriptTag (themeExtraJs (siteTheme cfg))
+  where
+    scriptTag :: Text -> L.Html ()
+    scriptTag file = L.script_ [L.defer_ "", L.src_ ("/" <> file)] (pure () :: L.Html ())
 
 katexScript :: Text
 katexScript =

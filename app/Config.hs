@@ -26,6 +26,7 @@ data Theme = Theme
     { themeMath :: Text
     , themeMathUrl :: Maybe Text
     , themeExtraCss :: [Text]
+    , themeExtraJs :: [Text]
     }
 
 data RawConfig = RawConfig
@@ -42,6 +43,7 @@ data RawTheme = RawTheme
     { rawMath :: Maybe Text
     , rawMathUrl :: Maybe Text
     , rawExtraCss :: Maybe [Text]
+    , rawExtraJs :: Maybe [Text]
     }
 
 instance FromJSON RawConfig where
@@ -61,6 +63,7 @@ instance FromJSON RawTheme where
             <$> object .:? "math"
             <*> object .:? "mathUrl"
             <*> object .:? "extraCss"
+            <*> object .:? "extraJs"
 
 loadConfig :: FilePath -> IO SiteConfig
 loadConfig path = do
@@ -78,6 +81,7 @@ loadConfig path = do
                 warn ("    math          = " <> themeMath (siteTheme defaults))
                 warn "    mathUrl       = (not set)"
                 warn "    extraCss      = (none)"
+                warn "    extraJs       = (none)"
                 pure defaults
             | otherwise -> die ("cannot read config.yaml: " <> T.pack (show e))
         Right content ->
@@ -120,6 +124,7 @@ resolveTheme Nothing = do
     warn ("  math      = " <> defaultMathMethod)
     warn "  mathUrl   = (not set)"
     warn "  extraCss  = (none)"
+    warn "  extraJs   = (none)"
     pure defaultTheme
 resolveTheme (Just raw) = do
     math <- case rawMath raw of
@@ -132,7 +137,8 @@ resolveTheme (Just raw) = do
         else die ("unknown math method '" <> math <> "'. Available methods: " <> T.intercalate ", " validMathMethods)
     mathUrl <- resolveMathUrl math (rawMathUrl raw)
     let extraCss = fromMaybe [] (rawExtraCss raw)
-    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss}
+        extraJs = fromMaybe [] (rawExtraJs raw)
+    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss, themeExtraJs = extraJs}
 
 resolveMathUrl :: Text -> Maybe Text -> IO (Maybe Text)
 resolveMathUrl "none" (Just _) = do
@@ -164,7 +170,7 @@ defaults =
         }
 
 defaultTheme :: Theme
-defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = []}
+defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
 
 defaultMathMethod :: Text
 defaultMathMethod = "mathjax"
