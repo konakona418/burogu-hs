@@ -1,4 +1,4 @@
-module Html (PageMeta (..), groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
+module Html (PageMeta (..), groupByTag, postUrl, render404, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
 
 import Config (SiteConfig (..), Theme (..))
 import Data.Map.Strict qualified as Map
@@ -82,6 +82,15 @@ katexScript =
         , "   });"
         , "}}});"
         ]
+
+render404 :: SiteConfig -> L.Html ()
+render404 cfg = layout cfg pageMeta $ L.div_ [L.class_ "not-found"] $ do
+    L.h1_ (L.toHtml ("404" :: Text))
+    L.p_ (L.toHtml ("Page not found." :: Text))
+    L.p_ $ L.a_ [L.href_ "/"] (L.toHtml ("Back to the home page" :: Text))
+  where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = "404", pmOgType = "website", pmOgPath = "/404.html", pmOgDescription = Nothing, pmHasMath = False}
 
 renderIndex :: SiteConfig -> [Post] -> L.Html ()
 renderIndex cfg posts = layout cfg pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)

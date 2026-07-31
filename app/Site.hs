@@ -12,6 +12,7 @@ import Feed (renderAtom)
 import Html qualified as H
 import Lucid qualified as L
 import Post (Post (..))
+import Sitemap (renderSitemap)
 import System.Directory (
     copyFile,
     createDirectoryIfMissing,
@@ -28,6 +29,7 @@ data BuildReport = BuildReport
     { brStaticFiles :: Int
     , brTagPages :: Int
     , brFeed :: Bool
+    , brSitemap :: Bool
     }
 
 build :: Paths -> SiteConfig -> [Post] -> IO BuildReport
@@ -43,12 +45,15 @@ buildWork paths config posts = do
     removePathForcibly (pOut paths)
     createDirectoryIfMissing True (pOut paths)
     TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
+    TIO.writeFile (pOut paths </> "404.html") (TL.toStrict (L.renderText (H.render404 config)))
     writeStyleSheet paths config
     mapM_ (writePost paths config) posts
     writeTagPages paths config posts
+    writeRobots paths config
     brFeed <- writeFeed paths config posts
+    brSitemap <- writeSitemap paths config posts
     nStatic <- copyStatic paths
-    pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed}
+    pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap}
 
 writeStyleSheet :: Paths -> SiteConfig -> IO ()
 writeStyleSheet paths config = do
@@ -86,6 +91,22 @@ writeFeed paths config posts =
                 TIO.writeFile (pOut paths </> "feed.xml") (renderAtom config baseUrl posts)
                 pure True
         _ -> pure False
+
+writeSitemap :: Paths -> SiteConfig -> [Post] -> IO Bool
+writeSitemap paths config posts =
+    case siteBaseUrl config of
+        Just baseUrl
+            | not (null posts) -> do
+                TIO.writeFile (pOut paths </> "sitemap.xml") (renderSitemap baseUrl posts)
+                pure True
+        _ -> pure False
+
+writeRobots :: Paths -> SiteConfig -> IO ()
+writeRobots paths config =
+    TIO.writeFile (pOut paths </> "robots.txt") $
+        "User-agent: *\n"
+            <> "Allow: /\n"
+            <> maybe "" (\baseUrl -> "Sitemap: " <> baseUrl <> "/sitemap.xml\n") (siteBaseUrl config)
 
 copyStatic :: Paths -> IO Int
 copyStatic paths = do

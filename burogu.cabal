@@ -8,7 +8,6 @@ author:          moe li
 homepage:        lizi.moe
 category:        Web
 build-type:      Simple
-extra-doc-files: CHANGELOG.md
 
 executable burogu
     main-is:          Main.hs
@@ -19,6 +18,7 @@ executable burogu
                     , Feed
                     , Html
                     , Post
+                    , Sitemap
                     , Site
     hs-source-dirs:   app
     default-language: GHC2021
@@ -47,6 +47,7 @@ test-suite burogu-test
                     , Feed
                     , Html
                     , Post
+                    , Sitemap
                     , Site
     hs-source-dirs:   test
                     , app

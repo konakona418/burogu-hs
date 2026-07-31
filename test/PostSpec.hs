@@ -9,10 +9,11 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
+import Html (groupByTag, render404, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
+import Sitemap (renderSitemap)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
@@ -72,6 +73,10 @@ tests =
         , cliDefaults
         , cliOverrides
         , cliInvalidArg
+        , sitemapUrls
+        , sitemapLastmod
+        , robotsContent
+        , notFoundPage
         ]
 
 fullFrontmatter :: TestTree
@@ -421,6 +426,44 @@ cliInvalidArg =
             Failure _ -> assertBool "rejected" True
             Success _ -> assertBool "should have failed" False
             CompletionInvoked _ -> assertBool "should have failed" False
+
+sitemapUrls :: TestTree
+sitemapUrls =
+    testCase "sitemap lists index, posts, tags and feed with absolute URLs" $ do
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]]
+        assertBool "urlset" ("<urlset" `textIn` xml)
+        assertBool "index" ("https://lizi.moe/" `textIn` xml)
+        assertBool "post" ("https://lizi.moe/posts/test/" `textIn` xml)
+        assertBool "tag index" ("https://lizi.moe/tags/" `textIn` xml)
+        assertBool "tag archive" ("https://lizi.moe/tags/essay/" `textIn` xml)
+        assertBool "feed" ("https://lizi.moe/feed.xml" `textIn` xml)
+
+sitemapLastmod :: TestTree
+sitemapLastmod =
+    testCase "posts carry their date as lastmod" $ do
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]]
+        assertBool "lastmod" ("<lastmod>2026-01-01</lastmod>" `textIn` xml)
+
+robotsContent :: TestTree
+robotsContent =
+    testCase "robots.txt allows crawling and points at the sitemap" $ do
+        let withBase = "User-agent: *\nAllow: /\nSitemap: https://lizi.moe/sitemap.xml\n"
+        assertEqual "with baseUrl" withBase (robotsText (Just "https://lizi.moe"))
+        assertEqual "without baseUrl" "User-agent: *\nAllow: /\n" (robotsText Nothing)
+
+notFoundPage :: TestTree
+notFoundPage =
+    testCase "404 page renders with a home link" $ do
+        let page = renderHtml (render404 testConfig)
+        assertBool "title" ("<title>404</title>" `textIn` page)
+        assertBool "heading" ("<h1>404</h1>" `textIn` page)
+        assertBool "home link" ("href=\"/\"" `textIn` page)
+
+robotsText :: Maybe Text -> Text
+robotsText baseUrl =
+    "User-agent: *\n"
+        <> "Allow: /\n"
+        <> maybe "" (\b -> "Sitemap: " <> b <> "/sitemap.xml\n") baseUrl
 
 escapedPost :: Post
 escapedPost =
