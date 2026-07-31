@@ -4,16 +4,18 @@ import Config (SiteConfig (..), Theme (..), loadConfig)
 import Control.Exception (IOException, catch)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import Post (loadPosts, warnCaseTags)
-import Site (BuildReport (..), build)
+import Post (loadPosts, mathMethod, warnCaseTags)
+import Site (BuildReport (..), build, postsSrcDir)
 import System.Exit (exitFailure)
 import System.IO (stderr)
 
 main :: IO ()
 main = do
     config <- loadConfig "config.yaml"
-    let styleName = themeHighlightStyle (siteTheme config)
-    eposts <- loadPosts styleName "src/_post" `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])
+    let theme = siteTheme config
+        styleName = themeHighlightStyle theme
+        math = mathMethod (themeMath theme) (themeMathUrl theme)
+    eposts <- loadPosts styleName math postsSrcDir `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])
     case eposts of
         Left errs -> do
             TIO.hPutStrLn stderr "Build failed. The following problems were found:"
@@ -22,10 +24,19 @@ main = do
             exitFailure
         Right posts -> do
             mapM_ (TIO.hPutStrLn stderr . ("warning: " <>)) (warnCaseTags posts)
-            report <- build config posts
-            TIO.putStrLn "Build complete."
-            TIO.putStrLn ("  Posts generated : " <> T.pack (show (length posts)))
-            TIO.putStrLn ("  Tags generated  : " <> T.pack (show (brTagPages report)))
-            TIO.putStrLn ("  Static files    : " <> T.pack (show (brStaticFiles report)))
-            TIO.putStrLn ("  Feed            : " <> if brFeed report then "site/feed.xml" else "skipped (set baseUrl in config.yaml)")
-            TIO.putStrLn "  Output directory: site/"
+            ereport <- (Right <$> build config posts) `catch` \(e :: IOException) -> pure (Left e)
+            case ereport of
+                Left e -> do
+                    TIO.hPutStrLn stderr ("Build failed: " <> T.pack (show e))
+                    TIO.hPutStrLn stderr "site/ was removed; nothing is left to deploy."
+                    exitFailure
+                Right report -> printSummary (length posts) report
+
+printSummary :: Int -> BuildReport -> IO ()
+printSummary nPosts report = do
+    TIO.putStrLn "Build complete."
+    TIO.putStrLn ("  Posts generated : " <> T.pack (show nPosts))
+    TIO.putStrLn ("  Tags generated  : " <> T.pack (show (brTagPages report)))
+    TIO.putStrLn ("  Static files    : " <> T.pack (show (brStaticFiles report)))
+    TIO.putStrLn ("  Feed            : " <> if brFeed report then "site/feed.xml" else "skipped (set baseUrl in config.yaml)")
+    TIO.putStrLn "  Output directory: site/"

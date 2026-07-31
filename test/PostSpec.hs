@@ -6,11 +6,12 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, renderIndex, renderPost, tagUrl)
+import Html (groupByTag, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
-import Post (Post (..), parsePost, warnCaseTags)
+import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
+import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
 
 main :: IO ()
 main = defaultMain tests
@@ -51,12 +52,18 @@ tests =
         , ogTypeWebsiteOnIndex
         , ogUrlAbsentWithoutBaseUrl
         , ogDescriptionFallsBack
+        , mathjaxInlineMath
+        , mathjaxNoMathNoScript
+        , plainMathNoScript
+        , mathMethodMapping
+        , tagsLabelCustomized
+        , tagArchiveTitleIsTagName
         ]
 
 fullFrontmatter :: TestTree
 fullFrontmatter =
     testCase "full frontmatter extracts all fields" $ do
-        result <- parsePost "tango" "hello.md" frontmatter
+        result <- parsePost "tango" plainMath "hello.md" frontmatter
         assertRight result $ \post -> do
             assertEqual "slug" "hello" (postSlug post)
             assertEqual "title" "Hello, World" (postTitle post)
@@ -67,7 +74,7 @@ fullFrontmatter =
 dateFromFilenamePrefix :: TestTree
 dateFromFilenamePrefix =
     testCase "date falls back to filename prefix" $ do
-        result <- parsePost "tango" "2026-07-31-hello.md" (frontmatterWith ["title: Hello"])
+        result <- parsePost "tango" plainMath "2026-07-31-hello.md" (frontmatterWith ["title: Hello"])
         assertRight result $ \post -> do
             assertEqual "date" "2026-07-31" (postDate post)
             assertEqual "slug drops the date prefix" "hello" (postSlug post)
@@ -75,7 +82,7 @@ dateFromFilenamePrefix =
 frontmatterDateBeatsPrefix :: TestTree
 frontmatterDateBeatsPrefix =
     testCase "frontmatter date wins over filename prefix" $ do
-        result <- parsePost "tango" "2026-07-31-hello.md" (frontmatterWith ["title: Hello", "date: 2025-01-02"])
+        result <- parsePost "tango" plainMath "2026-07-31-hello.md" (frontmatterWith ["title: Hello", "date: 2025-01-02"])
         assertRight result $ \post -> do
             assertEqual "date" "2025-01-02" (postDate post)
             assertEqual "slug still drops the date prefix" "hello" (postSlug post)
@@ -83,79 +90,79 @@ frontmatterDateBeatsPrefix =
 invalidDateErrors :: TestTree
 invalidDateErrors =
     testCase "invalid frontmatter date is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["title: Hello", "date: 2026/07/31"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["title: Hello", "date: 2026/07/31"])
         assertLeft result
-        result2 <- parsePost "tango" "2026-07-31-hello.md" (frontmatterWith ["title: Hello", "date: not-a-date"])
+        result2 <- parsePost "tango" plainMath "2026-07-31-hello.md" (frontmatterWith ["title: Hello", "date: not-a-date"])
         assertLeft result2
 
 missingDateErrors :: TestTree
 missingDateErrors =
     testCase "missing date with no prefix is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["title: Hello"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["title: Hello"])
         assertLeft result
 
 titleDefaultsToSlug :: TestTree
 titleDefaultsToSlug =
     testCase "missing title falls back to slug" $ do
-        result <- parsePost "tango" "2026-07-31-hello.md" "---\ndate: 2026-07-31\n---\n"
+        result <- parsePost "tango" plainMath "2026-07-31-hello.md" "---\ndate: 2026-07-31\n---\n"
         assertRight result $ \post -> assertEqual "title" "hello" (postTitle post)
 
 nonAsciiSlugPreserved :: TestTree
 nonAsciiSlugPreserved =
     testCase "non-ASCII filename is preserved as slug" $ do
-        result <- parsePost "tango" "2026-08-02-你好世界.md" "---\ndate: 2026-08-02\n---\n"
+        result <- parsePost "tango" plainMath "2026-08-02-你好世界.md" "---\ndate: 2026-08-02\n---\n"
         assertRight result $ \post -> assertEqual "slug" "你好世界" (postSlug post)
 
 tagsParsed :: TestTree
 tagsParsed =
     testCase "tags list is parsed" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a, b, c]"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a, b, c]"])
         assertRight result $ \post -> assertEqual "tags" ["a", "b", "c"] (postTags post)
 
 tagsWrongTypeErrors :: TestTree
 tagsWrongTypeErrors =
     testCase "tags with a non-list value is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["tags: not-a-list"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["tags: not-a-list"])
         assertLeft result
 
 emptyTagErrors :: TestTree
 emptyTagErrors =
     testCase "empty tag is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [\"\", b]"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [\"\", b]"])
         assertLeft result
 
 whitespaceTagErrors :: TestTree
 whitespaceTagErrors =
     testCase "whitespace-only tag is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [\"   \"]"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [\"   \"]"])
         assertLeft result
 
 reservedCharTagErrors :: TestTree
 reservedCharTagErrors =
     testCase "tag with a reserved character is a hard error" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [C#]"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [C#]"])
         assertLeft result
-        result2 <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a b]"])
+        result2 <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a b]"])
         assertLeft result2
-        result3 <- parsePost "tango" "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a/b]"])
+        result3 <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["date: 2026-07-31", "tags: [a/b]"])
         assertLeft result3
 
 draftParsed :: TestTree
 draftParsed =
     testCase "draft: true is parsed" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["title: Draft", "draft: true", "date: 2026-07-31"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["title: Draft", "draft: true", "date: 2026-07-31"])
         assertRight result $ \post -> assertEqual "draft" True (postDraft post)
 
 draftAllowsMissingDate :: TestTree
 draftAllowsMissingDate =
     testCase "draft allows a missing date" $ do
-        result <- parsePost "tango" "hello.md" (frontmatterWith ["title: Draft", "draft: true"])
+        result <- parsePost "tango" plainMath "hello.md" (frontmatterWith ["title: Draft", "draft: true"])
         assertRight result $ \post -> assertEqual "draft" True (postDraft post)
 
 bodyRendered :: TestTree
 bodyRendered =
     testCase "body is rendered as an HTML fragment" $ do
-        result <- parsePost "tango" "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\n# Heading\n\nBody text"
+        result <- parsePost "tango" plainMath "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\n# Heading\n\nBody text"
         assertRight result $ \post -> do
             assertBool "contains h1" ("<h1" `textIn` postBodyHtml post)
             assertBool "contains paragraph" ("Body text" `textIn` postBodyHtml post)
@@ -163,7 +170,7 @@ bodyRendered =
 highlightedCode :: TestTree
 highlightedCode =
     testCase "code blocks are syntax-highlighted with token classes" $ do
-        result <- parsePost "tango" "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\n```haskell\n-- a comment\nmain = putStrLn \"hi\"\n```"
+        result <- parsePost "tango" plainMath "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\n```haskell\n-- a comment\nmain = putStrLn \"hi\"\n```"
         assertRight result $ \post -> do
             assertBool "contains sourceCode class" ("sourceCode" `textIn` postBodyHtml post)
             assertBool "contains a token span" ("<span class=\"co\">" `textIn` postBodyHtml post)
@@ -253,6 +260,68 @@ feedSummaryHidden =
             "no summary"
             ("<summary" `notTextIn` renderAtom testConfig "https://lizi.moe" [postWithTags []])
 
+plainMath :: HTMLMathMethod
+plainMath = PlainMath
+
+mathJax :: HTMLMathMethod
+mathJax = MathJax defaultMathJaxURL
+
+mathjaxInlineMath :: TestTree
+mathjaxInlineMath =
+    testCase "MathJax renders inline math with TeX delimiters and injects the script" $ do
+        result <- parsePost "tango" mathJax "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\nInline $x^2$ math"
+        assertRight result $ \post -> do
+            assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
+            assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
+            assertBool "post marked as having math" (postHasMath post)
+            let page = renderHtml (renderPost testConfig post)
+            assertBool "script injected in page" ("<script" `textIn` page)
+            assertBool "mathjax URL" ("mathjax" `textIn` page)
+
+mathjaxNoMathNoScript :: TestTree
+mathjaxNoMathNoScript =
+    testCase "no script is injected without math content" $ do
+        result <- parsePost "tango" mathJax "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\nNo math here"
+        assertRight result $ \post -> do
+            assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
+            assertBool "not marked as having math" (not (postHasMath post))
+            let page = renderHtml (renderPost testConfig post)
+            assertBool "no script in page" ("<script" `notTextIn` page)
+
+plainMathNoScript :: TestTree
+plainMathNoScript =
+    testCase "PlainMath renders without a script tag" $ do
+        result <- parsePost "tango" plainMath "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\nInline $x^2$ math"
+        assertRight result $ \post -> do
+            assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
+            assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
+            let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
+            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig post))
+
+mathMethodMapping :: TestTree
+mathMethodMapping =
+    testCase "mathMethod maps names to pandoc methods" $ do
+        assertEqual "none" PlainMath (mathMethod "none" Nothing)
+        assertEqual "katex" (KaTeX "https://cdn.example.com/katex/") (mathMethod "katex" (Just "https://cdn.example.com/katex/"))
+        assertEqual "mathjax with url" (MathJax "https://cdn.example.com/mathjax.js") (mathMethod "mathjax" (Just "https://cdn.example.com/mathjax.js"))
+        assertEqual "mathjax default url" (MathJax defaultMathJaxURL) (mathMethod "mathjax" Nothing)
+
+tagsLabelCustomized :: TestTree
+tagsLabelCustomized =
+    testCase "custom tagsLabel appears in the nav and tag index title" $ do
+        let zhConfig = testConfig{siteTagsLabel = "标签"}
+            nav = renderHtml (renderIndex zhConfig [])
+        assertBool "nav label" (">标签</a>" `textIn` nav)
+        let indexPage = renderHtml (renderTagIndex zhConfig [("essay", [postWithTags ["essay"]])])
+        assertBool "index title" ("<title>标签</title>" `textIn` indexPage)
+
+tagArchiveTitleIsTagName :: TestTree
+tagArchiveTitleIsTagName =
+    testCase "tag archive title is the bare tag name" $ do
+        let page = renderHtml (renderTagArchive testConfig "essay" [postWithTags ["essay"]])
+        assertBool "title" ("<title>essay</title>" `textIn` page)
+        assertBool "no prefix" ("Tag:" `notTextIn` page)
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -296,7 +365,8 @@ testConfig =
         , siteDescription = "A test blog"
         , siteLang = "zh-CN"
         , siteBaseUrl = Just "https://lizi.moe"
-        , siteTheme = Theme{themeHighlightStyle = "tango"}
+        , siteTagsLabel = "Tags"
+        , siteTheme = Theme{themeHighlightStyle = "tango", themeMath = "mathjax", themeMathUrl = Nothing}
         }
 
 frontmatter :: Text
@@ -321,6 +391,7 @@ postWithTags tags =
         , postDescription = Nothing
         , postDraft = False
         , postBodyHtml = ""
+        , postHasMath = False
         }
 
 assertRight :: Either Text Post -> (Post -> IO ()) -> IO ()

@@ -49,3 +49,4 @@ stylesheet = do
     C.li C.? C.marginBottom (C.px 8)
     C.nav C.? C.marginBottom (C.px 24)
     C.nav C.? C.a C.? C.marginRight (C.px 12)
+    C.a C.# ("aria-hidden" C.@= "true") C.? C.display C.none

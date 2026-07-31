@@ -1,6 +1,6 @@
-module Html (PageMeta (..), groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl) where
+module Html (PageMeta (..), groupByTag, postUrl, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
 
-import Config (SiteConfig (..))
+import Config (SiteConfig (..), Theme (..))
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -8,12 +8,14 @@ import Data.Text qualified as T
 import Lucid qualified as L
 import Lucid.Base qualified as LB
 import Post (Post (..))
+import Text.Pandoc.Options (defaultKaTeXURL, defaultMathJaxURL)
 
 data PageMeta = PageMeta
     { pmTitle :: Text
     , pmOgType :: Text
     , pmOgPath :: Text
     , pmOgDescription :: Maybe Text
+    , pmHasMath :: Bool
     }
 
 layout :: SiteConfig -> PageMeta -> L.Html () -> L.Html ()
@@ -28,11 +30,12 @@ layout cfg meta body =
                     L.meta_ [L.name_ "description", L.content_ (siteDescription cfg)]
                     L.title_ (L.toHtml (pmTitle meta))
                     renderOg cfg meta
+                    renderMath cfg meta
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
                         L.a_ [L.href_ "/"] (L.toHtml (siteName cfg))
-                        L.a_ [L.href_ "/tags/"] (L.toHtml ("Tags" :: Text))
+                        L.a_ [L.href_ "/tags/"] (L.toHtml (siteTagsLabel cfg))
                     L.main_ body
                     L.footer_ [L.class_ "site-footer"] $ L.p_ (L.toHtml ("© " <> siteAuthor cfg))
             )
@@ -48,11 +51,43 @@ renderOg cfg meta = do
     renderOgUrl :: Text -> L.Html ()
     renderOgUrl baseUrl = L.meta_ [LB.makeAttribute "property" "og:url", L.content_ (baseUrl <> pmOgPath meta)]
 
+renderMath :: SiteConfig -> PageMeta -> L.Html ()
+renderMath cfg meta =
+    case (themeMath theme, pmHasMath meta) of
+        ("mathjax", True) ->
+            L.script_ [L.defer_ "", L.src_ (fromMaybe defaultMathJaxURL (themeMathUrl theme)), L.type_ "text/javascript"] (pure () :: L.Html ())
+        ("katex", True) -> do
+            L.link_ [L.rel_ "stylesheet", L.href_ (katexBase <> "katex.min.css")]
+            L.script_ [L.defer_ "", L.src_ (katexBase <> "katex.min.js")] (pure () :: L.Html ())
+            L.script_ (katexScript :: Text)
+        _ -> pure ()
+  where
+    theme = siteTheme cfg
+    katexBase = fromMaybe defaultKaTeXURL (themeMathUrl theme)
+
+katexScript :: Text
+katexScript =
+    T.unlines
+        [ "document.addEventListener(\"DOMContentLoaded\", function () {"
+        , " var mathElements = document.getElementsByClassName(\"math\");"
+        , " var macros = [];"
+        , " for (var i = 0; i < mathElements.length; i++) {"
+        , "  var texText = mathElements[i].firstChild;"
+        , "  if (mathElements[i].tagName == \"SPAN\") {"
+        , "   katex.render(texText.data, mathElements[i], {"
+        , "    displayMode: mathElements[i].classList.contains('display'),"
+        , "    throwOnError: false,"
+        , "    macros: macros,"
+        , "    fleqn: false"
+        , "   });"
+        , "}}});"
+        ]
+
 renderIndex :: SiteConfig -> [Post] -> L.Html ()
 renderIndex cfg posts = layout cfg pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
     pageMeta :: PageMeta
-    pageMeta = PageMeta{pmTitle = siteName cfg, pmOgType = "website", pmOgPath = "/", pmOgDescription = Nothing}
+    pageMeta = PageMeta{pmTitle = siteName cfg, pmOgType = "website", pmOgPath = "/", pmOgDescription = Nothing, pmHasMath = False}
     item :: Post -> L.Html ()
     item post =
         L.li_ [L.class_ "post-item"] $ do
@@ -70,13 +105,13 @@ renderPost cfg post = layout cfg pageMeta $ L.article_ $ do
     L.div_ [L.class_ "post-body"] (L.toHtmlRaw (postBodyHtml post))
   where
     pageMeta :: PageMeta
-    pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post}
+    pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post, pmHasMath = postHasMath post}
 
 renderTagIndex :: SiteConfig -> [(Text, [Post])] -> L.Html ()
 renderTagIndex cfg groups = layout cfg pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
     pageMeta :: PageMeta
-    pageMeta = PageMeta{pmTitle = "Tags", pmOgType = "website", pmOgPath = "/tags/", pmOgDescription = Nothing}
+    pageMeta = PageMeta{pmTitle = siteTagsLabel cfg, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
     item :: (Text, [Post]) -> L.Html ()
     item (tag, posts) =
         L.li_ [L.class_ "tag-item"] $ do
@@ -89,7 +124,7 @@ renderTagArchive cfg tag posts = layout cfg pageMeta $ L.article_ $ do
     L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
     pageMeta :: PageMeta
-    pageMeta = PageMeta{pmTitle = "Tag: " <> tag, pmOgType = "website", pmOgPath = tagUrl tag, pmOgDescription = Nothing}
+    pageMeta = PageMeta{pmTitle = tag, pmOgType = "website", pmOgPath = tagUrl tag, pmOgDescription = Nothing, pmHasMath = False}
     item :: Post -> L.Html ()
     item post =
         L.li_ [L.class_ "post-item"] $ do
@@ -104,8 +139,11 @@ groupByTag posts =
     pair :: Post -> [(Text, [Post])]
     pair post = [(tag, [post]) | tag <- postTags post]
 
+tagUrlPrefix :: Text
+tagUrlPrefix = "/tags/"
+
 tagUrl :: Text -> Text
-tagUrl tag = "/tags/" <> tag <> "/"
+tagUrl tag = tagUrlPrefix <> tag <> "/"
 
 renderTags :: [Text] -> L.Html ()
 renderTags [] = pure ()

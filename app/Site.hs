@@ -1,6 +1,7 @@
-module Site (BuildReport (..), build) where
+module Site (BuildReport (..), build, postsSrcDir) where
 
 import Config (SiteConfig (..), Theme (..))
+import Control.Exception (IOException, catch, throwIO)
 import Css (renderCss)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -19,8 +20,9 @@ import System.Directory (
  )
 import System.FilePath ((</>))
 
-srcDir, outDir, postsDir :: FilePath
+srcDir, postsSrcDir, outDir, postsDir :: FilePath
 srcDir = "src"
+postsSrcDir = srcDir </> "_post"
 outDir = "site"
 postsDir = "posts"
 
@@ -32,6 +34,14 @@ data BuildReport = BuildReport
 
 build :: SiteConfig -> [Post] -> IO BuildReport
 build config posts = do
+    report <-
+        buildWork config posts `catch` \(e :: IOException) -> do
+            removePathForcibly outDir
+            throwIO e
+    pure report
+
+buildWork :: SiteConfig -> [Post] -> IO BuildReport
+buildWork config posts = do
     removePathForcibly outDir
     createDirectoryIfMissing True outDir
     TIO.writeFile (outDir </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config posts)))
@@ -51,7 +61,7 @@ writePost config post = do
 writeTagPages :: SiteConfig -> [Post] -> IO ()
 writeTagPages config posts = do
     let groups = H.groupByTag posts
-        tagsDir = outDir </> "tags"
+        tagsDir = outDir </> T.unpack (T.dropWhile (== '/') (T.dropWhileEnd (== '/') H.tagUrlPrefix))
     createDirectoryIfMissing True tagsDir
     TIO.writeFile (tagsDir </> "index.html") (TL.toStrict (L.renderText (H.renderTagIndex config groups)))
     mapM_ (writeTagPage config tagsDir) groups

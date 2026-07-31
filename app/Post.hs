@@ -1,4 +1,4 @@
-module Post (Post (..), loadPosts, parsePost, warnCaseTags) where
+module Post (Post (..), loadPosts, mathMethod, parsePost, warnCaseTags) where
 
 import Data.Char (isDigit)
 import Data.List (nub, sortOn)
@@ -11,12 +11,13 @@ import Data.Text.IO qualified as TIO
 import System.Directory (listDirectory)
 import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
-import Text.Pandoc.Definition (MetaValue (..), Pandoc (..), lookupMeta)
+import Text.Pandoc.Definition (Inline (..), MetaValue (..), Pandoc (..), lookupMeta)
 import Text.Pandoc.Extensions (Extension (..), pandocExtensions)
 import Text.Pandoc.Highlighting (defaultStyle, highlightingStyles)
-import Text.Pandoc.Options (HighlightMethod (..), ReaderOptions (..), WriterOptions (..), def, enableExtension)
+import Text.Pandoc.Options (HTMLMathMethod (..), HighlightMethod (..), ReaderOptions (..), WriterOptions (..), def, defaultKaTeXURL, defaultMathJaxURL, enableExtension)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
+import Text.Pandoc.Walk (query)
 import Text.Pandoc.Writers.HTML (writeHtml5String)
 
 data Post = Post
@@ -27,6 +28,7 @@ data Post = Post
     , postDescription :: Maybe Text
     , postDraft :: Bool
     , postBodyHtml :: Text
+    , postHasMath :: Bool
     }
     deriving (Eq, Show)
 
@@ -37,6 +39,7 @@ data PostFields = PostFields
     , pfTags :: [Text]
     , pfDescription :: Maybe Text
     , pfDraft :: Bool
+    , pfHasMath :: Bool
     }
 
 readerOpts :: ReaderOptions
@@ -46,33 +49,40 @@ readerOpts =
             enableExtension Ext_autolink_bare_uris (enableExtension Ext_gfm_auto_identifiers pandocExtensions)
         }
 
-writerOpts :: Text -> WriterOptions
-writerOpts styleName =
+writerOpts :: Text -> HTMLMathMethod -> WriterOptions
+writerOpts styleName math =
     def
         { writerHighlightMethod = Skylighting (fromMaybe defaultStyle (lookup styleName highlightingStyles))
+        , writerHTMLMathMethod = math
         }
 
-loadPosts :: Text -> FilePath -> IO (Either [Text] [Post])
-loadPosts styleName dir = do
+mathMethod :: Text -> Maybe Text -> HTMLMathMethod
+mathMethod "none" _ = PlainMath
+mathMethod "mathjax" url = MathJax (fromMaybe defaultMathJaxURL url)
+mathMethod "katex" url = KaTeX (fromMaybe defaultKaTeXURL url)
+mathMethod _ _ = PlainMath
+
+loadPosts :: Text -> HTMLMathMethod -> FilePath -> IO (Either [Text] [Post])
+loadPosts styleName math dir = do
     names <- sortOn id . filter (T.isSuffixOf ".md" . T.pack) <$> listDirectory dir
-    results <- mapM (loadOne styleName dir) names
+    results <- mapM (loadOne styleName math dir) names
     let errs = [name <> ": " <> reason | Left (name, reason) <- results]
     if null errs
         then pure (Right (sortPosts [post | Right post <- results, not (postDraft post)]))
         else pure (Left errs)
 
-loadOne :: Text -> FilePath -> FilePath -> IO (Either (Text, Text) Post)
-loadOne styleName dir name = do
+loadOne :: Text -> HTMLMathMethod -> FilePath -> FilePath -> IO (Either (Text, Text) Post)
+loadOne styleName math dir name = do
     content <- TIO.readFile (dir </> name)
-    result <- parsePost styleName (dir </> name) content
+    result <- parsePost styleName math (dir </> name) content
     pure
         ( case result of
             Left reason -> Left (T.pack name, reason)
             Right post -> Right post
         )
 
-parsePost :: Text -> FilePath -> Text -> IO (Either Text Post)
-parsePost styleName path content = do
+parsePost :: Text -> HTMLMathMethod -> FilePath -> Text -> IO (Either Text Post)
+parsePost styleName math path content = do
     edoc <- runIO (readMarkdown readerOpts content)
     case edoc of
         Left err -> pure (Left (T.pack (show err)))
@@ -80,15 +90,16 @@ parsePost styleName path content = do
             case extractMeta name doc of
                 Left err -> pure (Left err)
                 Right fields -> do
-                    ebody <- runIO (writeHtml5String (writerOpts styleName) doc)
+                    ebody <- runIO (writeHtml5String (writerOpts styleName math) doc)
                     pure (either (Left . T.pack . show) (Right . mkPost fields) ebody)
   where
     name = T.pack (takeFileName path)
 
 extractMeta :: Text -> Pandoc -> Either Text PostFields
-extractMeta name (Pandoc meta _) = do
+extractMeta name (Pandoc meta body) = do
     let base = fromMaybe name (T.stripSuffix ".md" name)
         (prefixDate, slug) = slugFromName base
+        hasMath = not (null (query isMath body))
     draft <- case lookupMeta "draft" meta of
         Nothing -> Right False
         Just (MetaBool b) -> Right b
@@ -119,7 +130,11 @@ extractMeta name (Pandoc meta _) = do
         Just value -> case metaText value of
             Just t -> Right (Just t)
             Nothing -> Left "field 'description' must be a string"
-    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft}
+    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft, pfHasMath = hasMath}
+
+isMath :: Inline -> [()]
+isMath Math{} = [()]
+isMath _ = []
 
 mkPost :: PostFields -> Text -> Post
 mkPost fields body =
@@ -131,6 +146,7 @@ mkPost fields body =
         , postDescription = pfDescription fields
         , postDraft = pfDraft fields
         , postBodyHtml = body
+        , postHasMath = pfHasMath fields
         }
 
 sortPosts :: [Post] -> [Post]
