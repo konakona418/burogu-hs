@@ -5,55 +5,41 @@ A static blog generator written in Haskell.
 ## Quick start
 
 ```sh
-make init                  # create src/ with a sample post (refuses if not empty)
-make dev                   # rebuild on change + preview at http://127.0.0.1:8000
+make init       # create src/ with a sample post (refuses if not empty)
+make build      # build site/ from src/
+make preview    # build, then serve at http://127.0.0.1:8000
 ```
 
-## Commands (Makefile)
+## Commands
+
+Development tasks live in the Makefile:
 
 ```sh
-make build                 # build site/ from src/ (cabal run burogu)
-make test                  # run the test suite
-make preview               # build once, then serve site/ at http://127.0.0.1:8000
-make watch                 # rebuild automatically when src/ or config.yaml changes
-make dev                   # watch + preview together (Ctrl-C stops both)
-make clean                 # remove the site/ output directory
-make init                  # initialize an src/ tree
-make new-post              # create a new post
-make deploy                # build + rsync to the server
-make format                # fourmolu on all .hs files
+make build                  # build site/ from src/
+make test                   # run the test suite
+make format                 # fourmolu on all .hs files
+make init                   # initialize an src/ tree
+make preview                # build once, then serve at http://127.0.0.1:8000
+make watch                  # rebuild when src/ or config.yaml changes
 ```
 
-Targets taking arguments pass them through `ARGS`:
+Site operations are subcommands of the binary:
 
 ```sh
-make init ARGS="mycontent"                 # init into a custom directory
-make new-post ARGS="my-slug --draft"       # draft posts get no date
-make deploy ARGS="user@host:/var/www/site" # overrides .env target
-make sync ARGS="push"                      # commit src/ to the private source repo
+cabal run burogu -- build [--config PATH] [--src DIR] [--out DIR]
+cabal run burogu -- clean [--out DIR]
+cabal run burogu -- preview [--port PORT]
+cabal run burogu -- watch [--serve PORT]
+cabal run burogu -- init [DIR]
+cabal run burogu -- new-post <slug> [--draft]
+cabal run burogu -- deploy [TARGET]
+cabal run burogu -- sync [push|pull] [REPO]
+cabal run burogu -- --help                 # full usage
 ```
 
-## CLI
+Every subcommand supports `--help`. Build paths default to `config.yaml`, `src`, `site`.
 
-```sh
-cabal run burogu -- --help                 # usage and defaults
-cabal run burogu -- [--config PATH] [--src DIR] [--out DIR]
-```
-
-Defaults: `config.yaml`, `src`, `site`. Example: `cabal run burogu -- --src content --out dist`.
-
-## Tool scripts
-
-```sh
-./tool/init-src.sh [dir]                   # initialize src/ structure (default: src)
-./tool/new-post.sh <slug> [--draft]        # create a post from a template
-./tool/watch.sh [--serve PORT]             # auto-rebuild, optionally serve
-./tool/preview.sh [port]                   # build once + serve
-./tool/deploy.sh [user@host:/path]         # build + rsync --delete
-./tool/sync-src.sh [push|pull] [repo-url]  # sync src/ with a remote git repo
-```
-
-Deploy target priority: command-line argument, then `BUROGU_DEPLOY_TARGET` in `.env` (gitignored; see `.env.example`). The private source repo for sync-src.sh is configured the same way via `BUROGU_SRC_REPO` (e.g. a private repo holding `src/`, while `site/` goes to a GitHub Pages repo).
+Deploy target priority: command-line argument, then `BUROGU_DEPLOY_TARGET` in `.env` (gitignored; see `.env.example`). The private source repo for `sync` is configured the same way via `BUROGU_SRC_REPO` (e.g. a private repo holding `src/`, while `site/` goes to a GitHub Pages repo).
 
 ## Content
 

@@ -1,19 +1,38 @@
 module Main where
 
-import Cli (Paths (..), parsePaths)
+import Cli (Command (..), Paths (..), parseCommand)
 import Config (SiteConfig (..), Theme (..), loadConfig)
 import Control.Exception (IOException, catch)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Deploy qualified
+import Init qualified
+import NewPost qualified
 import Post (loadPosts, mathMethod, warnCaseTags)
 import Site (BuildReport (..), build)
+import Sync qualified
+import System.Directory (removePathForcibly)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
-import System.IO (stderr)
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
+import Watch (runPreview, runWatch)
 
 main :: IO ()
 main = do
-    paths <- parsePaths
+    hSetBuffering stdout LineBuffering
+    command <- parseCommand
+    case command of
+        Build paths -> runBuild paths
+        Clean outDir -> removePathForcibly outDir
+        Preview port -> runPreview port
+        Watch mServe -> runWatch mServe
+        Init dir -> Init.run dir
+        NewPost slug draft -> NewPost.run slug draft
+        Deploy mTarget -> Deploy.run mTarget
+        Sync action mRepo -> Sync.run action mRepo
+
+runBuild :: Paths -> IO ()
+runBuild paths = do
     config <- loadConfig (pConfig paths)
     let math = mathMethod (themeMath (siteTheme config)) (themeMathUrl (siteTheme config))
     eposts <- loadPosts math (pSrc paths </> "_post") `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])

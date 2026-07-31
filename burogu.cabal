@@ -13,13 +13,19 @@ executable burogu
     main-is:          Main.hs
     other-modules:    Cli
                     , Config
-                    , Paths_burogu
                     , Css
+                    , Deploy
+                    , Env
                     , Feed
                     , Html
+                    , Init
+                    , NewPost
+                    , Paths_burogu
                     , Post
                     , Sitemap
                     , Site
+                    , Sync
+                    , Watch
     hs-source-dirs:   app
     default-language: GHC2021
     default-extensions: OverloadedStrings
@@ -30,11 +36,14 @@ executable burogu
                     , clay
                     , directory
                     , filepath
+                    , bytestring
                     , lucid
                     , optparse-applicative
                     , pandoc
                     , pandoc-types
+                    , process
                     , text
+                    , time
                     , yaml
 
 test-suite burogu-test
@@ -42,13 +51,19 @@ test-suite burogu-test
     main-is:          PostSpec.hs
     other-modules:    Cli
                     , Config
-                    , Paths_burogu
                     , Css
+                    , Deploy
+                    , Env
                     , Feed
                     , Html
+                    , Init
+                    , NewPost
+                    , Paths_burogu
                     , Post
                     , Sitemap
                     , Site
+                    , Sync
+                    , Watch
     hs-source-dirs:   test
                     , app
     default-language: GHC2021
@@ -60,11 +75,14 @@ test-suite burogu-test
                     , clay
                     , directory
                     , filepath
+                    , bytestring
                     , lucid
                     , optparse-applicative
                     , pandoc
                     , pandoc-types
+                    , process
                     , tasty
                     , tasty-hunit
                     , text
+                    , time
                     , yaml

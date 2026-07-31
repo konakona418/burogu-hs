@@ -1,6 +1,6 @@
 module Main where
 
-import Cli (Paths (..), pathsInfo)
+import Cli (Command (..), Paths (..), cliInfo)
 import Config (SiteConfig (..), Theme (..))
 import Css (TokenColor (..), renderCss, tokenColors)
 import Data.Either (isLeft)
@@ -406,32 +406,34 @@ tagCountHook =
 
 cliDefaults :: TestTree
 cliDefaults =
-    testCase "paths default to config.yaml, src, site" $ do
-        let result = execParserPure defaultPrefs pathsInfo []
+    testCase "build paths default to config.yaml, src, site" $ do
+        let result = execParserPure defaultPrefs cliInfo ["build"]
         case result of
-            Success paths -> do
+            Success (Build paths) -> do
                 assertEqual "config" "config.yaml" (pConfig paths)
                 assertEqual "src" "src" (pSrc paths)
                 assertEqual "out" "site" (pOut paths)
             Failure err -> assertBool ("expected success, got: " <> show err) False
             CompletionInvoked _ -> assertBool "unexpected completion" False
+            Success _ -> assertBool "expected Build command" False
 
 cliOverrides :: TestTree
 cliOverrides =
-    testCase "paths are overridden by flags" $ do
-        let result = execParserPure defaultPrefs pathsInfo ["--config", "cfg.yaml", "--src", "content", "--out", "dist"]
+    testCase "build paths are overridden by flags" $ do
+        let result = execParserPure defaultPrefs cliInfo ["build", "--config", "cfg.yaml", "--src", "content", "--out", "dist"]
         case result of
-            Success paths -> do
+            Success (Build paths) -> do
                 assertEqual "config" "cfg.yaml" (pConfig paths)
                 assertEqual "src" "content" (pSrc paths)
                 assertEqual "out" "dist" (pOut paths)
             Failure err -> assertBool ("expected success, got: " <> show err) False
             CompletionInvoked _ -> assertBool "unexpected completion" False
+            Success _ -> assertBool "expected Build command" False
 
 cliInvalidArg :: TestTree
 cliInvalidArg =
     testCase "unknown flags are rejected" $ do
-        let result = execParserPure defaultPrefs pathsInfo ["--nope"]
+        let result = execParserPure defaultPrefs cliInfo ["--nope"]
         case result of
             Failure _ -> assertBool "rejected" True
             Success _ -> assertBool "should have failed" False

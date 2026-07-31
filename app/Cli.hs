@@ -1,5 +1,6 @@
-module Cli (Paths (..), parsePaths, pathsInfo) where
+module Cli (Command (..), Paths (..), parseCommand, cliInfo) where
 
+import Data.Text (Text)
 import Data.Version (showVersion)
 import Options.Applicative
 import Paths_burogu (version)
@@ -10,17 +11,38 @@ data Paths = Paths
     , pOut :: FilePath
     }
 
-parsePaths :: IO Paths
-parsePaths = execParser pathsInfo
+data Command
+    = Build {cPaths :: Paths}
+    | Clean {cOut :: FilePath}
+    | Preview {pPort :: Int}
+    | Watch {wServe :: Maybe Int}
+    | Init {iDir :: FilePath}
+    | NewPost {nSlug :: Text, nDraft :: Bool}
+    | Deploy {dTarget :: Maybe Text}
+    | Sync {sAction :: Text, sRepo :: Maybe Text}
 
-pathsInfo :: ParserInfo Paths
-pathsInfo =
+parseCommand :: IO Command
+parseCommand = execParser cliInfo
+
+cliInfo :: ParserInfo Command
+cliInfo =
     info
-        (helper <*> versionOption <*> pathsParser)
+        (helper <*> versionOption <*> subparser commands)
         ( fullDesc
-            <> progDesc "Generate a static blog site from src/ into site/"
-            <> header "burogu - a static blog generator"
+            <> progDesc "A static blog generator"
+            <> header "burogu"
         )
+
+commands :: Mod CommandFields Command
+commands =
+    command "build" (info (Build <$> pathsParser) (progDesc "Build the site"))
+        <> command "clean" (info (Clean <$> outParser) (progDesc "Remove the output directory"))
+        <> command "preview" (info (Preview <$> portParser) (progDesc "Build once, then serve the site locally"))
+        <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild when sources change, optionally serve"))
+        <> command "init" (info (Init <$> dirParser) (progDesc "Initialize an src/ tree"))
+        <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
+        <> command "deploy" (info (Deploy <$> targetParser) (progDesc "Build and deploy the site via rsync"))
+        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync src/ with a remote git repository"))
 
 pathsParser :: Parser Paths
 pathsParser =
@@ -46,6 +68,73 @@ pathsParser =
                 <> showDefault
                 <> help "Output directory"
             )
+
+outParser :: Parser FilePath
+outParser =
+    strOption
+        ( long "out"
+            <> metavar "DIR"
+            <> value "site"
+            <> showDefault
+            <> help "Output directory"
+        )
+
+portParser :: Parser Int
+portParser =
+    option
+        auto
+        ( long "port"
+            <> metavar "PORT"
+            <> value 8000
+            <> showDefault
+            <> help "Port to serve on"
+        )
+
+serveParser :: Parser (Maybe Int)
+serveParser =
+    optional
+        ( option
+            auto
+            ( long "serve"
+                <> metavar "PORT"
+                <> help "Also serve the site on this port"
+            )
+        )
+
+dirParser :: Parser FilePath
+dirParser =
+    strArgument
+        ( metavar "DIR"
+            <> value "src"
+            <> help "Target directory (default: src)"
+        )
+
+slugParser :: Parser Text
+slugParser = strArgument (metavar "SLUG" <> help "Post slug (used in the filename and URL)")
+
+draftParser :: Parser Bool
+draftParser = switch (long "draft" <> help "Create a draft (no date)")
+
+targetParser :: Parser (Maybe Text)
+targetParser =
+    optional
+        ( strArgument
+            ( metavar "TARGET"
+                <> help "rsync target like user@host:/path (defaults to BUROGU_DEPLOY_TARGET)"
+            )
+        )
+
+actionParser :: Parser Text
+actionParser = strArgument (metavar "ACTION" <> help "push or pull")
+
+repoParser :: Parser (Maybe Text)
+repoParser =
+    optional
+        ( strArgument
+            ( metavar "REPO"
+                <> help "git repo URL (defaults to BUROGU_SRC_REPO)"
+            )
+        )
 
 versionOption :: Parser (a -> a)
 versionOption =
