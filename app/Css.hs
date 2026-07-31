@@ -88,7 +88,9 @@ listSpacing = do
         C.flexWrap CF.wrap
         "gap" C.-: "0 var(--space-list-gap)"
         "align-items" C.-: "baseline"
-    (".post-item .post-desc" :: C.Selector) C.? ("flex-basis" C.-: "100%")
+    (".post-item .post-desc" :: C.Selector) C.? do
+        "flex-basis" C.-: "100%"
+        "margin" C.-: "6px 0 0"
     (".post-meta" :: C.Selector) C.? do
         C.display C.flex
         "gap" C.-: "0 var(--space-list-gap)"
