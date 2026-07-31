@@ -30,6 +30,7 @@ Targets taking arguments pass them through `ARGS`:
 make init ARGS="mycontent"                 # init into a custom directory
 make new-post ARGS="my-slug --draft"       # draft posts get no date
 make deploy ARGS="user@host:/var/www/site" # overrides .env target
+make sync ARGS="push"                      # commit src/ to the private source repo
 ```
 
 ## CLI
@@ -49,9 +50,10 @@ Defaults: `config.yaml`, `src`, `site`. Example: `cabal run burogu -- --src cont
 ./tool/watch.sh [--serve PORT]             # auto-rebuild, optionally serve
 ./tool/preview.sh [port]                   # build once + serve
 ./tool/deploy.sh [user@host:/path]         # build + rsync --delete
+./tool/sync-src.sh [push|pull] [repo-url]  # sync src/ with a remote git repo
 ```
 
-Deploy target priority: command-line argument, then `BUROGU_DEPLOY_TARGET` in `.env` (gitignored; see `.env.example`).
+Deploy target priority: command-line argument, then `BUROGU_DEPLOY_TARGET` in `.env` (gitignored; see `.env.example`). The private source repo for sync-src.sh is configured the same way via `BUROGU_SRC_REPO` (e.g. a private repo holding `src/`, while `site/` goes to a GitHub Pages repo).
 
 ## Content
 

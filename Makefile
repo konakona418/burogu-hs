@@ -1,4 +1,4 @@
-.PHONY: build test preview watch dev clean new-post deploy init format
+.PHONY: build test preview watch dev clean new-post deploy init sync format
 
 build:
 	cabal run burogu
@@ -20,6 +20,9 @@ clean:
 
 init:
 	./tool/init-src.sh $(ARGS)
+
+sync:
+	./tool/sync-src.sh $(ARGS)
 
 new-post:
 	./tool/new-post.sh $(ARGS)
