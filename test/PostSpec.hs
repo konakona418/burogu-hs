@@ -11,9 +11,10 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, render404, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
+import Html (groupByTag, render404, renderCustomPage, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
+import Page (CustomPage (..), loadPage)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Sitemap (renderSitemap)
 import Test.Tasty (TestTree, defaultMain, testGroup)
@@ -85,6 +86,13 @@ tests =
         , serverParsePath
         , serverResolveFile
         , serverContentType
+        , customPageTitle
+        , customPageMissing
+        , customPageBody
+        , customPageHasMath
+        , aboutNavShown
+        , aboutNavHidden
+        , copyrightCustom
         ]
 
 fullFrontmatter :: TestTree
@@ -301,7 +309,7 @@ mathjaxInlineMath =
             assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
             assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
             assertBool "post marked as having math" (postHasMath post)
-            let page = renderHtml (renderPost testConfig post)
+            let page = renderHtml (renderPost testConfig Nothing post)
             assertBool "script injected in page" ("<script" `textIn` page)
             assertBool "mathjax URL" ("mathjax" `textIn` page)
 
@@ -312,7 +320,7 @@ mathjaxNoMathNoScript =
         assertRight result $ \post -> do
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             assertBool "not marked as having math" (not (postHasMath post))
-            let page = renderHtml (renderPost testConfig post)
+            let page = renderHtml (renderPost testConfig Nothing post)
             assertBool "no script in page" ("<script" `notTextIn` page)
 
 plainMathNoScript :: TestTree
@@ -323,7 +331,7 @@ plainMathNoScript =
             assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
-            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig post))
+            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig Nothing post))
 
 mathMethodMapping :: TestTree
 mathMethodMapping =
@@ -337,15 +345,15 @@ tagsLabelCustomized :: TestTree
 tagsLabelCustomized =
     testCase "custom tagsLabel appears in the nav and tag index title" $ do
         let zhConfig = testConfig{siteTagsLabel = "标签"}
-            nav = renderHtml (renderIndex zhConfig [])
+            nav = renderHtml (renderIndex zhConfig Nothing [])
         assertBool "nav label" (">标签</a>" `textIn` nav)
-        let indexPage = renderHtml (renderTagIndex zhConfig [("essay", [postWithTags ["essay"]])])
+        let indexPage = renderHtml (renderTagIndex zhConfig Nothing [("essay", [postWithTags ["essay"]])])
         assertBool "index title" ("<title>标签</title>" `textIn` indexPage)
 
 tagArchiveTitleIsTagName :: TestTree
 tagArchiveTitleIsTagName =
     testCase "tag archive title is the bare tag name" $ do
-        let page = renderHtml (renderTagArchive testConfig "essay" [postWithTags ["essay"]])
+        let page = renderHtml (renderTagArchive testConfig Nothing "essay" [postWithTags ["essay"]])
         assertBool "title" ("<title>essay</title>" `textIn` page)
         assertBool "no prefix" ("Tag:" `notTextIn` page)
 
@@ -407,7 +415,7 @@ cssExtraCssAppended =
 tagCountHook :: TestTree
 tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
-        let page = renderHtml (renderTagIndex testConfig [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig Nothing [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
 
 cliDefaults :: TestTree
@@ -472,7 +480,7 @@ robotsContent =
 notFoundPage :: TestTree
 notFoundPage =
     testCase "404 page renders with a home link" $ do
-        let page = renderHtml (render404 testConfig)
+        let page = renderHtml (render404 testConfig Nothing)
         assertBool "title" ("<title>404</title>" `textIn` page)
         assertBool "heading" ("<h1>404</h1>" `textIn` page)
         assertBool "home link" ("href=\"/\"" `textIn` page)
@@ -487,9 +495,9 @@ extraJsInjected :: TestTree
 extraJsInjected =
     testCase "extra JS files are injected as deferred scripts on every page" $ do
         let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
-        let page = renderHtml (renderIndex jsConfig [])
+        let page = renderHtml (renderIndex jsConfig Nothing [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
-        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig []))
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig Nothing []))
 
 serverParsePath :: TestTree
 serverParsePath =
@@ -514,6 +522,57 @@ serverContentType =
         assertEqual "css" "text/css; charset=utf-8" (contentType "style.css")
         assertEqual "png" "image/png" (contentType "1.png")
 
+customPageTitle :: TestTree
+customPageTitle =
+    testCase "custom pages read the optional frontmatter title" $ do
+        writeFile "/tmp/burogu-test/custom-page-title.md" "---\ntitle: About Me\n---\n# About Me\n\nSome bio.\n"
+        result <- loadPage plainMath "/tmp/burogu-test/custom-page-title.md"
+        case result of
+            Right (Just page) -> assertEqual "title" (Just "About Me") (cpTitle page)
+            _ -> assertBool "expected a page" False
+
+customPageMissing :: TestTree
+customPageMissing =
+    testCase "missing custom page files yield Nothing" $ do
+        result <- loadPage plainMath "/tmp/burogu-test/does-not-exist-404.md"
+        assertEqual "missing" (Right Nothing) result
+
+customPageBody :: TestTree
+customPageBody =
+    testCase "custom page bodies are rendered from markdown" $ do
+        writeFile "/tmp/burogu-test/custom-page-body.md" "# No title\n\nBody.\n"
+        result <- loadPage plainMath "/tmp/burogu-test/custom-page-body.md"
+        case result of
+            Right (Just page) -> assertBool "h1 rendered" ("<h1" `textIn` cpBodyHtml page)
+            _ -> assertBool "expected a page" False
+
+customPageHasMath :: TestTree
+customPageHasMath =
+    testCase "custom pages detect math for script injection" $ do
+        writeFile "/tmp/burogu-test/custom-page-math.md" "# Math\n\n$x^2$\n"
+        result <- loadPage plainMath "/tmp/burogu-test/custom-page-math.md"
+        case result of
+            Right (Just page) -> assertBool "hasMath" (cpHasMath page)
+            _ -> assertBool "expected a page" False
+
+aboutNavShown :: TestTree
+aboutNavShown =
+    testCase "about link appears in the nav when present" $ do
+        let page = renderHtml (renderIndex testConfig (Just "About Me") [])
+        assertBool "nav link" ("href=\"/about/\">About Me" `textIn` page)
+
+aboutNavHidden :: TestTree
+aboutNavHidden =
+    testCase "no about link without an about page" $ do
+        let page = renderHtml (renderIndex testConfig Nothing [])
+        assertBool "no link" ("/about/" `notTextIn` page)
+
+copyrightCustom :: TestTree
+copyrightCustom =
+    testCase "footer uses the configurable copyright" $ do
+        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} Nothing [])
+        assertBool "custom copyright" ("自定义版权" `textIn` page)
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -521,7 +580,7 @@ escapedPost =
 ogMetaOnPost :: TestTree
 ogMetaOnPost =
     testCase "post pages carry article OG metadata" $ do
-        let html = renderHtml (renderPost testConfig (postWithTags ["essay"]))
+        let html = renderHtml (renderPost testConfig Nothing (postWithTags ["essay"]))
         assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
         assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
@@ -529,21 +588,21 @@ ogMetaOnPost =
 ogTypeWebsiteOnIndex :: TestTree
 ogTypeWebsiteOnIndex =
     testCase "index pages carry website OG metadata" $ do
-        let html = renderHtml (renderIndex testConfig [postWithTags ["essay"]])
+        let html = renderHtml (renderIndex testConfig Nothing [postWithTags ["essay"]])
         assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
 
 ogUrlAbsentWithoutBaseUrl :: TestTree
 ogUrlAbsentWithoutBaseUrl =
     testCase "og:url is omitted without baseUrl" $ do
-        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [])
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} Nothing [])
         assertBool "no og:url" ("og:url" `notTextIn` html)
         assertBool "og:title still present" ("og:title" `textIn` html)
 
 ogDescriptionFallsBack :: TestTree
 ogDescriptionFallsBack =
     testCase "og:description falls back to siteDescription" $ do
-        let html = renderHtml (renderPost testConfig (postWithTags []))
+        let html = renderHtml (renderPost testConfig Nothing (postWithTags []))
         assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
 
 renderHtml :: L.Html () -> Text
@@ -558,6 +617,7 @@ testConfig =
         , siteLang = "zh-CN"
         , siteBaseUrl = Just "https://lizi.moe"
         , siteTagsLabel = "Tags"
+        , siteCopyright = "© moe li"
         , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
         }
 

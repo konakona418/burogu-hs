@@ -19,6 +19,7 @@ data SiteConfig = SiteConfig
     , siteLang :: Text
     , siteBaseUrl :: Maybe Text
     , siteTagsLabel :: Text
+    , siteCopyright :: Text
     , siteTheme :: Theme
     }
 
@@ -36,6 +37,7 @@ data RawConfig = RawConfig
     , rawLang :: Maybe Text
     , rawBaseUrl :: Maybe Text
     , rawTagsLabel :: Maybe Text
+    , rawCopyright :: Maybe Text
     , rawTheme :: Maybe RawTheme
     }
 
@@ -55,6 +57,7 @@ instance FromJSON RawConfig where
             <*> object .:? "siteLang"
             <*> object .:? "baseUrl"
             <*> object .:? "tagsLabel"
+            <*> object .:? "siteCopyright"
             <*> object .:? "theme"
 
 instance FromJSON RawTheme where
@@ -96,8 +99,9 @@ loadConfig path = do
         lang <- field "siteLang" (rawLang raw) (siteLang defaults)
         baseUrl <- resolveBaseUrl (rawBaseUrl raw)
         tagsLabel <- field "tagsLabel" (rawTagsLabel raw) (siteTagsLabel defaults)
+        copyright <- field "siteCopyright" (rawCopyright raw) ("© " <> author)
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteCopyright = copyright, siteTheme = theme}
 
 field :: Text -> Maybe Text -> Text -> IO Text
 field key Nothing fallback = do
@@ -166,6 +170,7 @@ defaults =
         , siteLang = "zh-CN"
         , siteBaseUrl = Nothing
         , siteTagsLabel = "Tags"
+        , siteCopyright = "© "
         , siteTheme = defaultTheme
         }
 

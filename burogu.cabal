@@ -21,6 +21,8 @@ executable burogu
                     , Html
                     , Init
                     , NewPost
+                    , Page
+                    , Pandoc
                     , Paths_burogu
                     , Post
                     , Sitemap
@@ -61,6 +63,8 @@ test-suite burogu-test
                     , Html
                     , Init
                     , NewPost
+                    , Page
+                    , Pandoc
                     , Paths_burogu
                     , Post
                     , Sitemap

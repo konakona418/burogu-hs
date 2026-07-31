@@ -8,16 +8,14 @@ import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Pandoc (docHasMath, readerOpts, writerOpts)
 import System.Directory (listDirectory)
 import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
-import Text.Pandoc.Definition (Inline (..), MetaValue (..), Pandoc (..), lookupMeta)
-import Text.Pandoc.Extensions (Extension (..), pandocExtensions)
-import Text.Pandoc.Highlighting (defaultStyle)
-import Text.Pandoc.Options (HTMLMathMethod (..), HighlightMethod (..), ReaderOptions (..), WriterOptions (..), def, defaultKaTeXURL, defaultMathJaxURL, enableExtension)
+import Text.Pandoc.Definition (MetaValue (..), Pandoc (..), lookupMeta)
+import Text.Pandoc.Options (HTMLMathMethod (..), defaultKaTeXURL, defaultMathJaxURL)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
-import Text.Pandoc.Walk (query)
 import Text.Pandoc.Writers.HTML (writeHtml5String)
 
 data Post = Post
@@ -41,20 +39,6 @@ data PostFields = PostFields
     , pfDraft :: Bool
     , pfHasMath :: Bool
     }
-
-readerOpts :: ReaderOptions
-readerOpts =
-    def
-        { readerExtensions =
-            enableExtension Ext_autolink_bare_uris (enableExtension Ext_gfm_auto_identifiers pandocExtensions)
-        }
-
-writerOpts :: HTMLMathMethod -> WriterOptions
-writerOpts math =
-    def
-        { writerHighlightMethod = Skylighting defaultStyle
-        , writerHTMLMathMethod = math
-        }
 
 mathMethod :: Text -> Maybe Text -> HTMLMathMethod
 mathMethod "none" _ = PlainMath
@@ -99,7 +83,7 @@ extractMeta :: Text -> Pandoc -> Either Text PostFields
 extractMeta name (Pandoc meta body) = do
     let base = fromMaybe name (T.stripSuffix ".md" name)
         (prefixDate, slug) = slugFromName base
-        hasMath = not (null (query isMath body))
+        hasMath = docHasMath (Pandoc meta body)
     draft <- case lookupMeta "draft" meta of
         Nothing -> Right False
         Just (MetaBool b) -> Right b
@@ -131,10 +115,6 @@ extractMeta name (Pandoc meta body) = do
             Just t -> Right (Just t)
             Nothing -> Left "field 'description' must be a string"
     pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft, pfHasMath = hasMath}
-
-isMath :: Inline -> [()]
-isMath Math{} = [()]
-isMath _ = []
 
 mkPost :: PostFields -> Text -> Post
 mkPost fields body =
