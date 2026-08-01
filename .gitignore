@@ -11,6 +11,7 @@
 
 # content (initialize with `make init` / `burogu init`)
 /src
+config.yaml
 
 # internal docs (not shipped)
 /_TODO.md

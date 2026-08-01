@@ -34,10 +34,22 @@ configTemplate =
         , "#   commitEmail: you@example.com             # git deployment only; required (commit identity)"
         , "# srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`"
         , "theme:"
+        , "  preset: aria           # aria | shaft (built-in theme presets)"
         , "  math: mathjax          # none | mathjax | katex"
         , "  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js # optional: override the CDN URL"
         , "  extraCss: [theme.css]"
         , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
+        , "  # fonts:               # optional: override the preset's font styles"
+        , "  #   body: [\"Helvetica Neue\", \"PingFang SC\", sans-serif]"
+        , "  #   display: [Georgia, \"Noto Serif CJK SC\", \"Songti SC\", SimSun, serif]"
+        , "  #   code: [ui-monospace, Menlo, monospace]"
+        , "  #   size: 17px"
+        , "  #   lineHeight: 28px"
+        , "  #   files:             # optional: embed font files (copied to site/fonts/, @font-face generated)"
+        , "  #     - src: fonts/my-serif.woff2"
+        , "  #       family: My Serif"
+        , "  #       weight: 400"
+        , "  #       style: normal"
         ]
 
 gitignoreTemplate :: Text

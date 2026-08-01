@@ -3,7 +3,7 @@ module Main where
 import Cli (Command (..), Paths (..), cliInfo)
 import Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig)
 import Control.Exception (IOException, try)
-import Css (TokenColor (..), renderCss, tokenColors)
+import Css (FontFile (..), Fonts (..), TokenColor (..), ariaPreset, emptyFonts, renderCss, tokenColors)
 import Data.ByteString qualified as BS
 import Data.Either (isLeft)
 import Data.List (sort)
@@ -11,7 +11,9 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
+import Data.Yaml (ParseException, decodeEither')
 import Feed (feedUrl, renderAtom)
 import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
@@ -20,6 +22,7 @@ import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Registry (SitePages (..), classifyPages, navItems)
 import Search (renderSearch, renderSearchIndex)
+import Shaft (presetByName, presetNames, shaftPreset)
 import Site (BuildReport (..), build)
 import Sitemap (renderSitemap)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
@@ -83,8 +86,18 @@ tests =
         , cssMobileBreakpoint
         , cssOverflowRules
         , cssSafeArea
+        , searchInputFocusStyled
         , viewportFitCover
         , cssExtraCssAppended
+        , ariaPresetRegression
+        , presetLookup
+        , fontOverridesApplied
+        , fontStackQuoting
+        , fontFaceEmitted
+        , shaftPresetOutput
+        , fontsFromJson
+        , siteNameClass
+        , tagSeparatorSpan
         , tagCountHook
         , cliDefaults
         , cliOverrides
@@ -131,6 +144,7 @@ tests =
         , searchPageRendered
         , searchPageScript
         , buildKeepsOutputOnPageError
+        , fontFileMissingKeepsOldOutput
         ]
 
 fullFrontmatter :: TestTree
@@ -395,7 +409,7 @@ tagArchiveTitleIsTagName =
 cssRootTokens :: TestTree
 cssRootTokens =
     testCase "stylesheet declares design tokens on :root" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool ":root block" (":root" `textIn` css)
         assertBool "color token" ("--color-text" `textIn` css)
         assertBool "font token" ("--font-family" `textIn` css)
@@ -404,14 +418,14 @@ cssRootTokens =
 cssDarkMediaQuery :: TestTree
 cssDarkMediaQuery =
     testCase "stylesheet ships a dark token set via prefers-color-scheme" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "media query" ("prefers-color-scheme: dark" `textIn` css)
         assertBool "dark background" ("#1a1a1a" `textIn` css)
 
 cssTokenRules :: TestTree
 cssTokenRules =
     testCase "token rules reference CSS variables" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "comment rule" ("code span.co" `textIn` css)
         assertBool "var reference" ("var(--token-co)" `textIn` css)
 
@@ -429,14 +443,14 @@ cssTokenTableCompleteness =
 cssGradientRules :: TestTree
 cssGradientRules =
     testCase "tag gradient consumes the tag-count hook" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "hue computation" ("var(--tag-count)" `textIn` css)
         assertBool "hsl usage" ("hsl(var(--tag-hue)" `textIn` css)
 
 cssListSpacing :: TestTree
 cssListSpacing =
     testCase "list items space out date, title and tags" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "post-item is flex with gap" ("0 var(--space-list-gap)" `textIn` css)
         assertBool "post-meta is flex with gap" (".post-meta" `textIn` css)
         assertBool "tag-item pairs name and count" ("0 6px" `textIn` css)
@@ -444,7 +458,7 @@ cssListSpacing =
 cssMobileBreakpoint :: TestTree
 cssMobileBreakpoint =
     testCase "a 600px breakpoint scales tokens down for phones" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "media query" ("max-width: 600px" `textIn` css)
         assertBool "smaller font" ("--font-size" `textIn` css)
         assertBool "smaller code" ("font-size : 14px" `textIn` css)
@@ -452,17 +466,25 @@ cssMobileBreakpoint =
 cssOverflowRules :: TestTree
 cssOverflowRules =
     testCase "images and tables cannot overflow the content area" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "img constrained" ("max-width : 100%" `textIn` css)
         assertBool "table scrolls" ("overflow-x : auto" `textIn` css)
 
 cssSafeArea :: TestTree
 cssSafeArea =
     testCase "body padding accounts for notched-device safe areas" $ do
-        let css = renderCss []
+        let css = renderCss ariaPreset emptyFonts []
         assertBool "left inset" ("safe-area-inset-left" `textIn` css)
         assertBool "right inset" ("safe-area-inset-right" `textIn` css)
         assertBool "tap highlight removed" ("tap-highlight-color" `textIn` css)
+
+searchInputFocusStyled :: TestTree
+searchInputFocusStyled =
+    testCase "search input drops the default ring and clear button" $ do
+        let css = renderCss ariaPreset emptyFonts []
+        assertBool "custom focus style" (".search-input:focus" `textIn` css)
+        assertBool "no default outline" ("outline      : none" `textIn` css)
+        assertBool "webkit clear button hidden" ("-webkit-search-cancel-button" `textIn` css)
 
 viewportFitCover :: TestTree
 viewportFitCover =
@@ -473,8 +495,123 @@ viewportFitCover =
 cssExtraCssAppended :: TestTree
 cssExtraCssAppended =
     testCase "user CSS is appended after the generated rules" $ do
-        let css = renderCss ["/* user css */"]
+        let css = renderCss ariaPreset emptyFonts ["/* user css */"]
         assertBool "appended at the end" ("/* user css */" `T.isSuffixOf` css)
+
+ariaPresetRegression :: TestTree
+ariaPresetRegression =
+    testCase "aria preset output matches the pre-refactor golden" $ do
+        golden <- TIO.readFile "test/aria-style.css"
+        assertEqual "aria css" golden (renderCss ariaPreset emptyFonts [])
+
+presetLookup :: TestTree
+presetLookup =
+    testCase "preset registry resolves names" $ do
+        assertEqual "names" ["aria", "shaft"] presetNames
+        assertBool "aria found" (isJust (presetByName "aria"))
+        assertBool "shaft found" (isJust (presetByName "shaft"))
+        assertBool "unknown not found" (not (isJust (presetByName "nope")))
+
+fontOverridesApplied :: TestTree
+fontOverridesApplied =
+    testCase "user font overrides land after the preset defaults" $ do
+        let css =
+                renderCss
+                    ariaPreset
+                    Fonts
+                        { fontsBody = Just ["My Font"]
+                        , fontsDisplay = Nothing
+                        , fontsCode = Nothing
+                        , fontsSize = Just "18px"
+                        , fontsLineHeight = Nothing
+                        , fontsFiles = Nothing
+                        }
+                    []
+            (pre, _) = T.breakOn "18px" css
+        assertBool "override size present" ("18px" `textIn` css)
+        assertBool "override family present" ("My Font" `textIn` css)
+        assertBool "override comes after preset" ("17px" `T.isInfixOf` pre)
+
+fontStackQuoting :: TestTree
+fontStackQuoting =
+    testCase "font stacks quote spaced names but not generic keywords" $ do
+        let css =
+                renderCss
+                    ariaPreset
+                    Fonts
+                        { fontsBody = Nothing
+                        , fontsDisplay = Just ["Noto Serif CJK SC", "SimSun", "serif"]
+                        , fontsCode = Nothing
+                        , fontsSize = Nothing
+                        , fontsLineHeight = Nothing
+                        , fontsFiles = Nothing
+                        }
+                    []
+        assertBool "quoted names, bare keywords" ("\"Noto Serif CJK SC\", SimSun, serif" `textIn` css)
+
+fontFaceEmitted :: TestTree
+fontFaceEmitted =
+    testCase "embedded font files generate @font-face rules" $ do
+        let css =
+                renderCss
+                    ariaPreset
+                    Fonts
+                        { fontsBody = Nothing
+                        , fontsDisplay = Nothing
+                        , fontsCode = Nothing
+                        , fontsSize = Nothing
+                        , fontsLineHeight = Nothing
+                        , fontsFiles = Just [FontFile "fonts/myserif.woff2" "My Serif" "700" "italic"]
+                        }
+                    []
+        assertBool "font-face rule" ("@font-face" `textIn` css)
+        assertBool "quoted family" ("font-family : \"My Serif\"" `textIn` css)
+        assertBool "weight" ("font-weight : 700" `textIn` css)
+        assertBool "style" ("font-style  : italic" `textIn` css)
+        assertBool "site-root url" ("url(/fonts/myserif.woff2)" `textIn` css)
+
+shaftPresetOutput :: TestTree
+shaftPresetOutput =
+    testCase "shaft preset ships the editorial look" $ do
+        let css = renderCss shaftPreset emptyFonts []
+        assertBool "accent token" ("--color-accent" `textIn` css)
+        assertBool "display font token" ("--font-display" `textIn` css)
+        assertBool "display stack quoted" ("\"Songti SC\"" `textIn` css)
+        assertBool "archive year" (".archive-year" `textIn` css)
+        assertBool "clip path" ("clip-path" `textIn` css)
+        assertBool "tag outline" (".post-tag" `textIn` css)
+        assertBool "404 big type" (".not-found h1" `textIn` css)
+        assertBool "dark accent" ("#ff5347" `textIn` css)
+        assertBool "no transitions" ("transition" `notTextIn` css)
+
+fontsFromJson :: TestTree
+fontsFromJson =
+    testCase "fonts block parses from yaml" $ do
+        case decodeEither' "body:\n  - \"Noto Serif CJK SC\"\n  - SimSun\n  - serif\nsize: 18px" :: Either ParseException Fonts of
+            Left _ -> assertBool "fonts parse failed" False
+            Right fonts -> do
+                assertEqual "body stack" (Just ["Noto Serif CJK SC", "SimSun", "serif"]) (fontsBody fonts)
+                assertEqual "size" (Just "18px") (fontsSize fonts)
+        case decodeEither' "src: fonts/a.woff2\nfamily: My Serif" :: Either ParseException FontFile of
+            Left _ -> assertBool "font file parse failed" False
+            Right ff -> do
+                assertEqual "weight default" "400" (ffWeight ff)
+                assertEqual "style default" "normal" (ffStyle ff)
+        case decodeEither' "src: fonts/a.woff2\nfamily: My Serif\nweight: 700" :: Either ParseException FontFile of
+            Left _ -> assertBool "numeric weight parse failed" False
+            Right ffNum -> assertEqual "numeric weight" "700" (ffWeight ffNum)
+
+siteNameClass :: TestTree
+siteNameClass =
+    testCase "site name link carries the site-name class" $ do
+        let page = renderHtml (renderIndex testConfig [] [])
+        assertBool "site-name" ("class=\"site-name\"" `textIn` page)
+
+tagSeparatorSpan :: TestTree
+tagSeparatorSpan =
+    testCase "tag separators are styled spans" $ do
+        let page = renderHtml (renderPost testConfig [] (postWithTags ["essay", "life"]))
+        assertBool "separator span" ("<span class=\"post-tag-sep\"> · </span>" `textIn` page)
 
 tagCountHook :: TestTree
 tagCountHook =
@@ -923,6 +1060,22 @@ buildKeepsOutputOnPageError =
         marker <- doesFileExist "/tmp/burogu-test/build-out/marker.txt"
         assertBool "old output kept" marker
 
+fontFileMissingKeepsOldOutput :: TestTree
+fontFileMissingKeepsOldOutput =
+    testCase "missing embedded font file keeps the previous output" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/font-src"
+        createDirectoryIfMissing True "/tmp/burogu-test/font-out"
+        writeFile "/tmp/burogu-test/font-out/marker.txt" "old"
+        let fonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Just [FontFile "fonts/nope.woff2" "Nope" "400" "normal"]}
+            config = testConfig{siteTheme = (siteTheme testConfig){themeFonts = fonts}}
+            paths = Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/font-src", pOut = "/tmp/burogu-test/font-out"}
+        result <- try (build paths config []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+        marker <- doesFileExist "/tmp/burogu-test/font-out/marker.txt"
+        assertBool "old output kept" marker
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -970,7 +1123,7 @@ testConfig =
         , siteGeneratedBy = Nothing
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
         , siteSrcRepo = Nothing
-        , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
+        , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = [], themePreset = "aria", themeFonts = emptyFonts}
         }
 
 frontmatter :: Text

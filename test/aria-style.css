@@ -1,0 +1,462 @@
+
+:root
+{
+  --color-bg         : #ffffff;
+  --color-text       : #333333;
+  --color-muted      : #666666;
+  --color-link       : #0066cc;
+  --color-link-hover : #0055aa;
+  --color-code-bg    : #f5f5f5;
+  --color-mark       : #ffe58f;
+  --font-family      : "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-size        : 17px;
+  --line-height      : 28px;
+  --content-width    : 800px;
+  --space-page-top   : 24px;
+  --space-page-side  : 16px;
+  --space-list-gap   : 8px;
+  --space-nav-gap    : 24px;
+  --space-nav-link   : 12px;
+  --token-al         : #ef2929;
+  --token-an         : #8f5902;
+  --token-at         : #204a87;
+  --token-bn         : #0000cf;
+  --token-bu         : #204a87;
+  --token-cf         : #204a87;
+  --token-ch         : #4e9a06;
+  --token-cn         : #8f5902;
+  --token-co         : #8f5902;
+  --token-cv         : #8f5902;
+  --token-do         : #8f5902;
+  --token-dt         : #204a87;
+  --token-dv         : #0000cf;
+  --token-er         : #a40000;
+  --token-ex         : #a40000;
+  --token-fl         : #0000cf;
+  --token-fu         : #204a87;
+  --token-im         : #204a87;
+  --token-in         : #8f5902;
+  --token-kw         : #204a87;
+  --token-op         : #ce5c00;
+  --token-ot         : #8f5902;
+  --token-pp         : #8f5902;
+  --token-re         : #4e9a06;
+  --token-sc         : #ce5c00;
+  --token-ss         : #4e9a06;
+  --token-st         : #4e9a06;
+  --token-va         : #000000;
+  --token-vs         : #4e9a06;
+  --token-wa         : #8f5902;
+}
+
+html
+{
+  scrollbar-gutter            : stable;
+  -webkit-text-size-adjust    : 100%;
+  -webkit-tap-highlight-color : transparent;
+  background-color            : var(--color-bg);
+}
+
+body
+{
+  max-width        : var(--content-width);
+  margin-left      : auto;
+  margin-right     : auto;
+  padding-top      : var(--space-page-top);
+  padding-left     : calc(var(--space-page-side) + env(safe-area-inset-left, 0px));
+  padding-right    : calc(var(--space-page-side) + env(safe-area-inset-right, 0px));
+  font-family      : var(--font-family);
+  font-size        : var(--font-size);
+  line-height      : var(--line-height);
+  color            : var(--color-text);
+  background-color : var(--color-bg);
+}
+
+a
+{
+  color           : var(--color-link);
+  text-decoration : underline;
+}
+
+a:hover
+{
+  color : var(--color-link-hover);
+}
+
+h1
+{
+  font-size   : calc(var(--font-size) * 1.65);
+  line-height : calc(var(--line-height) * 1.45);
+}
+
+time
+{
+  color : var(--color-muted);
+}
+
+.tag-count
+{
+  color : var(--color-muted);
+}
+
+.site-footer
+{
+  color : var(--color-muted);
+}
+
+code
+{
+  background-color : var(--color-code-bg);
+  padding-left     : 4px;
+  padding-right    : 4px;
+  border-radius    : 3px 3px 3px 3px;
+}
+
+pre
+{
+  background-color : var(--color-code-bg);
+  padding          : 12px 16px 12px 16px;
+  border-radius    : 4px 4px 4px 4px;
+  overflow-x       : scroll;
+}
+
+
+pre code
+{
+  background-color : transparent;
+}
+
+ul
+{
+  list-style-type : none;
+}
+
+li
+{
+  margin-bottom : var(--space-list-gap);
+}
+
+nav
+{
+  margin-bottom : var(--space-nav-gap);
+}
+
+
+nav a
+{
+  margin-right : var(--space-nav-link);
+}
+
+a[aria-hidden='true']
+{
+  display : none;
+}
+
+mark
+{
+  background-color : var(--color-mark);
+  color            : var(--color-text);
+}
+
+.search-input
+{
+  display          : block;
+  width            : 100%;
+  box-sizing       : border-box;
+  padding          : 8px 12px;
+  font-size        : var(--font-size);
+  background-color : var(--color-code-bg);
+  color            : var(--color-text);
+  border           : 1px solid var(--color-muted);
+  border-radius    : 4px;
+  margin-bottom    : var(--space-nav-gap);
+}
+
+.search-input:focus
+{
+  outline      : none;
+  border-color : var(--color-link);
+}
+
+input[type=search]::-webkit-search-cancel-button
+{
+  -webkit-appearance : none;
+  appearance         : none;
+}
+
+img
+{
+  max-width : 100%;
+  height    : auto;
+}
+
+table
+{
+  display    : block;
+  overflow-x : auto;
+  max-width  : 100%;
+}
+
+figure
+{
+  max-width : 100%;
+}
+
+.post-item
+{
+  display     : flex;
+  flex-wrap   : wrap;
+  gap         : 0 var(--space-list-gap);
+  align-items : baseline;
+}
+
+.post-item .post-desc
+{
+  flex-basis : 100%;
+  margin     : 6px 0 0;
+}
+
+.post-meta
+{
+  display     : flex;
+  gap         : 0 var(--space-list-gap);
+  align-items : baseline;
+}
+
+.tag-item
+{
+  display     : flex;
+  gap         : 0 6px;
+  align-items : baseline;
+}
+
+code span.al
+{
+  color : var(--token-al);
+}
+
+code span.an
+{
+  color : var(--token-an);
+}
+
+code span.at
+{
+  color : var(--token-at);
+}
+
+code span.bn
+{
+  color : var(--token-bn);
+}
+
+code span.bu
+{
+  color : var(--token-bu);
+}
+
+code span.cf
+{
+  color : var(--token-cf);
+}
+
+code span.ch
+{
+  color : var(--token-ch);
+}
+
+code span.cn
+{
+  color : var(--token-cn);
+}
+
+code span.co
+{
+  color : var(--token-co);
+}
+
+code span.cv
+{
+  color : var(--token-cv);
+}
+
+code span.do
+{
+  color : var(--token-do);
+}
+
+code span.dt
+{
+  color : var(--token-dt);
+}
+
+code span.dv
+{
+  color : var(--token-dv);
+}
+
+code span.er
+{
+  color : var(--token-er);
+}
+
+code span.ex
+{
+  color : var(--token-ex);
+}
+
+code span.fl
+{
+  color : var(--token-fl);
+}
+
+code span.fu
+{
+  color : var(--token-fu);
+}
+
+code span.im
+{
+  color : var(--token-im);
+}
+
+code span.in
+{
+  color : var(--token-in);
+}
+
+code span.kw
+{
+  color : var(--token-kw);
+}
+
+code span.op
+{
+  color : var(--token-op);
+}
+
+code span.ot
+{
+  color : var(--token-ot);
+}
+
+code span.pp
+{
+  color : var(--token-pp);
+}
+
+code span.re
+{
+  color : var(--token-re);
+}
+
+code span.sc
+{
+  color : var(--token-sc);
+}
+
+code span.ss
+{
+  color : var(--token-ss);
+}
+
+code span.st
+{
+  color : var(--token-st);
+}
+
+code span.va
+{
+  color : var(--token-va);
+}
+
+code span.vs
+{
+  color : var(--token-vs);
+}
+
+code span.wa
+{
+  color : var(--token-wa);
+}
+
+.tag-item
+{
+  --tag-hue : calc(190deg + var(--tag-count) * 18deg);
+}
+
+.tag-name
+{
+  color : hsl(var(--tag-hue), 70%, 45%);
+}
+
+@media screen and (prefers-color-scheme: dark)
+{
+
+:root
+{
+  --color-bg         : #1a1a1a;
+  --color-text       : #e6e6e6;
+  --color-muted      : #999999;
+  --color-link       : #6ab0f3;
+  --color-link-hover : #8cc2f5;
+  --color-code-bg    : #2d2d2d;
+  --color-mark       : #8a7000;
+  --token-al         : #95da4c;
+  --token-an         : #3f8058;
+  --token-at         : #2980b9;
+  --token-bn         : #f67400;
+  --token-bu         : #7f8c8d;
+  --token-cf         : #fdbc4b;
+  --token-ch         : #3daee9;
+  --token-cn         : #27aeae;
+  --token-co         : #7a7c7d;
+  --token-cv         : #7f8c8d;
+  --token-do         : #a43340;
+  --token-dt         : #2980b9;
+  --token-dv         : #f67400;
+  --token-er         : #da4453;
+  --token-ex         : #0099ff;
+  --token-fl         : #f67400;
+  --token-fu         : #8e44ad;
+  --token-im         : #27ae60;
+  --token-in         : #c45b00;
+  --token-kw         : #cfcfc2;
+  --token-op         : #cfcfc2;
+  --token-ot         : #27ae60;
+  --token-pp         : #27ae60;
+  --token-re         : #2980b9;
+  --token-sc         : #3daee9;
+  --token-ss         : #da4453;
+  --token-st         : #f44f4f;
+  --token-va         : #27aeae;
+  --token-vs         : #da4453;
+  --token-wa         : #da4453;
+}
+
+}
+@media screen and (max-width: 600px)
+{
+
+:root
+{
+  --font-size       : 16px;
+  --line-height     : 24px;
+  --space-page-top  : 16px;
+  --space-page-side : 12px;
+}
+
+pre
+{
+  font-size : 14px;
+}
+
+
+nav a
+{
+  padding : 8px 4px;
+}
+
+}
+
+/* Generated with Clay, http://fvisser.nl/clay */

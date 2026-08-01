@@ -1,9 +1,14 @@
-module Css (TokenColor (..), renderCss, tokenColors) where
+module Css (FontFile (..), Fonts (..), Preset (..), TokenColor (..), ariaPreset, emptyFonts, renderCss, tokenColors) where
 
 import Clay qualified as C
 import Clay.Flexbox qualified as CF
 import Clay.Media qualified as CM
+import Control.Applicative ((<|>))
+import Data.Aeson (FromJSON (..), Value (..), withObject, (.!=), (.:), (.:?))
+import Data.Maybe (fromMaybe)
+import Data.Scientific (FPFormat (Generic), floatingOrInteger, formatScientific)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 
 data TokenColor = TokenColor
@@ -46,19 +51,142 @@ tokenColors =
     , TokenColor "wa" "#8f5902" "#da4453"
     ]
 
-renderCss :: [Text] -> Text
-renderCss extraCss = TL.toStrict (C.render stylesheet) <> mconcat extraCss
+{- | User font overrides for the theme preset. Every field is optional;
+absent fields fall back to the preset's defaults.
+-}
+data Fonts = Fonts
+    { fontsBody :: Maybe [Text]
+    , fontsDisplay :: Maybe [Text]
+    , fontsCode :: Maybe [Text]
+    , fontsSize :: Maybe Text
+    , fontsLineHeight :: Maybe Text
+    , fontsFiles :: Maybe [FontFile]
+    }
 
-stylesheet :: C.Css
-stylesheet = do
-    rootTokens
-    darkTokens
-    baseRules
-    overflowRules
-    listSpacing
-    mobileRules
-    tokenRules
-    tagGradient
+data FontFile = FontFile
+    { ffSrc :: Text
+    , ffFamily :: Text
+    , ffWeight :: Text
+    , ffStyle :: Text
+    }
+
+emptyFonts :: Fonts
+emptyFonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Nothing}
+
+instance FromJSON Fonts where
+    parseJSON = withObject "fonts" $ \object ->
+        Fonts
+            <$> object .:? "body"
+            <*> object .:? "display"
+            <*> object .:? "code"
+            <*> object .:? "size"
+            <*> object .:? "lineHeight"
+            <*> object .:? "files"
+
+instance FromJSON FontFile where
+    parseJSON = withObject "fontFile" $ \object -> do
+        src <- object .: "src"
+        family <- object .: "family"
+        weight <- object .:? "weight" .!= String "400"
+        style <- object .:? "style" .!= String "normal"
+        pure (FontFile src family (valueToText weight) (valueToText style))
+      where
+        valueToText :: Value -> Text
+        valueToText (String s) = s
+        valueToText (Number n) = case (floatingOrInteger n :: Either Double Integer) of
+            Right i -> T.pack (show i)
+            Left _ -> T.pack (formatScientific Generic Nothing n)
+        valueToText (Bool b) = T.pack (show b)
+        valueToText v = T.pack (show v)
+
+{- | A theme preset: the full token sets (light and dark, including the
+syntax-highlight token colors) plus its own rules. Font-family tokens are
+declared by the preset, but user fonts (config `theme.fonts`) override
+them via later emission in the same :root block.
+-}
+data Preset = Preset
+    { presetName :: Text
+    , presetTokens :: [(Text, Text)]
+    , presetDarkTokens :: [(Text, Text)]
+    , presetRules :: C.Css
+    , presetDisplayFont :: Maybe [Text]
+    , presetCodeFont :: Maybe [Text]
+    }
+
+ariaPreset :: Preset
+ariaPreset =
+    Preset
+        { presetName = "aria"
+        , presetTokens = baseTokens <> [("token-" <> tcClass tc, tcLight tc) | tc <- tokenColors]
+        , presetDarkTokens = darkTokenValues <> [("token-" <> tcClass tc, tcDark tc) | tc <- tokenColors]
+        , presetRules = tagGradient
+        , presetDisplayFont = Nothing
+        , presetCodeFont = Nothing
+        }
+
+renderCss :: Preset -> Fonts -> [Text] -> Text
+renderCss preset fonts extraCss =
+    fontFaceCss (fromMaybe [] (fontsFiles fonts))
+        <> TL.toStrict (C.render (stylesheet preset fontTokens))
+        <> mconcat extraCss
+  where
+    fontTokens = fontOverrideTokens preset fonts
+
+stylesheet :: Preset -> [(Text, Text)] -> C.Css
+stylesheet preset fontTokens =
+    mconcat
+        [ rootTokens (presetTokens preset <> fontTokens)
+        , darkTokens (presetDarkTokens preset)
+        , baseRules
+        , overflowRules
+        , listSpacing
+        , mobileRules
+        , tokenRules
+        , presetRules preset
+        ]
+
+{- | Tokens emitted after the preset tokens for the user font overrides;
+later keys win in the same :root block. Display/code fall back to the
+preset's defaults when the user did not override them.
+-}
+fontOverrideTokens :: Preset -> Fonts -> [(Text, Text)]
+fontOverrideTokens preset fonts =
+    maybe [] (\stack -> [("font-family", fontStack stack)]) (fontsBody fonts)
+        <> maybe [] (\v -> [("font-size", v)]) (fontsSize fonts)
+        <> maybe [] (\v -> [("line-height", v)]) (fontsLineHeight fonts)
+        <> maybe [] (\stack -> [("font-display", fontStack stack)]) (fontsDisplay fonts <|> presetDisplayFont preset)
+        <> maybe [] (\stack -> [("font-code", fontStack stack)]) (fontsCode fonts <|> presetCodeFont preset)
+
+{- | Render a font stack: names with spaces are quoted, generic keywords
+(serif, sans-serif, ...) are not.
+-}
+fontStack :: [Text] -> Text
+fontStack = T.intercalate ", " . map renderName
+  where
+    renderName n
+        | n `elem` genericKeywords = n
+        | T.any (== ' ') n = "\"" <> n <> "\""
+        | otherwise = n
+
+genericKeywords :: [Text]
+genericKeywords = ["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace"]
+
+fontFaceCss :: [FontFile] -> Text
+fontFaceCss = mconcat . map one
+  where
+    one ff =
+        T.unlines
+            [ "@font-face"
+            , "{"
+            , "  font-family : " <> quote (ffFamily ff) <> ";"
+            , "  font-weight : " <> ffWeight ff <> ";"
+            , "  font-style  : " <> ffStyle ff <> ";"
+            , "  src         : url(/fonts/" <> basename (ffSrc ff) <> ");"
+            , "}"
+            ]
+    quote name = "\"" <> name <> "\""
+    basename :: Text -> Text
+    basename = T.reverse . T.takeWhile (/= '/') . T.reverse
 
 overflowRules :: C.Css
 overflowRules = do
@@ -100,11 +228,11 @@ listSpacing = do
         "gap" C.-: "0 6px"
         "align-items" C.-: "baseline"
 
-rootTokens :: C.Css
-rootTokens = (":root" :: C.Selector) C.? mapM_ emit baseTokens
+rootTokens :: [(Text, Text)] -> C.Css
+rootTokens tokens = (":root" :: C.Selector) C.? mapM_ emit tokens
 
-darkTokens :: C.Css
-darkTokens = C.query CM.screen [CM.prefersColorScheme CM.dark] $ (":root" :: C.Selector) C.? mapM_ emit darkTokenValues
+darkTokens :: [(Text, Text)] -> C.Css
+darkTokens tokens = C.query CM.screen [CM.prefersColorScheme CM.dark] $ (":root" :: C.Selector) C.? mapM_ emit tokens
 
 emit :: (Text, Text) -> C.Css
 emit (key, value) = C.Key (C.Plain ("--" <> key)) C.-: value
@@ -128,7 +256,6 @@ baseTokens =
     , ("space-nav-gap", "24px")
     , ("space-nav-link", "12px")
     ]
-        <> [("token-" <> tcClass tc, tcLight tc) | tc <- tokenColors]
 
 darkTokenValues :: [(Text, Text)]
 darkTokenValues =
@@ -140,7 +267,6 @@ darkTokenValues =
     , ("color-code-bg", "#2d2d2d")
     , ("color-mark", "#8a7000")
     ]
-        <> [("token-" <> tcClass tc, tcDark tc) | tc <- tokenColors]
 
 baseRules :: C.Css
 baseRules = do
@@ -201,6 +327,12 @@ baseRules = do
         "border" C.-: "1px solid var(--color-muted)"
         "border-radius" C.-: "4px"
         "margin-bottom" C.-: "var(--space-nav-gap)"
+    (".search-input" :: C.Selector) C.# C.focus C.? do
+        "outline" C.-: "none"
+        "border-color" C.-: "var(--color-link)"
+    C.element "input[type=search]::-webkit-search-cancel-button" C.? do
+        "-webkit-appearance" C.-: "none"
+        "appearance" C.-: "none"
 
 tokenRules :: C.Css
 tokenRules = mapM_ tokenRule tokenColors

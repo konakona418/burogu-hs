@@ -1,6 +1,7 @@
 module Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig) where
 
 import Control.Exception (IOException, catch)
+import Css (Fonts (..), emptyFonts)
 import Data.Aeson (FromJSON (..), withObject, (.:?))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -8,6 +9,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
 import Data.Yaml (decodeEither', prettyPrintParseException)
+import Shaft (presetNames)
 import System.Exit (exitFailure)
 import System.IO (stderr)
 import System.IO.Error (isDoesNotExistError)
@@ -38,8 +40,13 @@ data Theme = Theme
     , themeMathUrl :: Maybe Text
     , themeExtraCss :: [Text]
     , themeExtraJs :: [Text]
+    , themePreset :: Text
+    , themeFonts :: Fonts
     }
 
+{- | User font overrides for the theme preset. Every field is optional;
+absent fields fall back to the preset's defaults.
+-}
 data RawConfig = RawConfig
     { rawName :: Maybe Text
     , rawAuthor :: Maybe Text
@@ -67,6 +74,8 @@ data RawTheme = RawTheme
     , rawMathUrl :: Maybe Text
     , rawExtraCss :: Maybe [Text]
     , rawExtraJs :: Maybe [Text]
+    , rawPreset :: Maybe Text
+    , rawFonts :: Maybe Fonts
     }
 
 instance FromJSON RawConfig where
@@ -100,6 +109,8 @@ instance FromJSON RawTheme where
             <*> object .:? "mathUrl"
             <*> object .:? "extraCss"
             <*> object .:? "extraJs"
+            <*> object .:? "preset"
+            <*> object .:? "fonts"
 
 loadConfig :: FilePath -> IO SiteConfig
 loadConfig path = do
@@ -170,6 +181,7 @@ resolveTheme Nothing = do
     warn "  mathUrl   = (not set)"
     warn "  extraCss  = (none)"
     warn "  extraJs   = (none)"
+    warn ("  preset    = " <> defaultPreset)
     pure defaultTheme
 resolveTheme (Just raw) = do
     math <- case rawMath raw of
@@ -181,9 +193,17 @@ resolveTheme (Just raw) = do
         then pure ()
         else die ("unknown math method '" <> math <> "'. Available methods: " <> T.intercalate ", " validMathMethods)
     mathUrl <- resolveMathUrl math (rawMathUrl raw)
+    preset <- case rawPreset raw of
+        Nothing -> do
+            warn "theme.preset is not set in config.yaml; using default: aria"
+            pure defaultPreset
+        Just p
+            | p `elem` presetNames -> pure p
+            | otherwise -> die ("unknown theme preset '" <> p <> "'. Available presets: " <> T.intercalate ", " presetNames)
     let extraCss = fromMaybe [] (rawExtraCss raw)
         extraJs = fromMaybe [] (rawExtraJs raw)
-    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss, themeExtraJs = extraJs}
+        fonts = fromMaybe emptyFonts (rawFonts raw)
+    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss, themeExtraJs = extraJs, themePreset = preset, themeFonts = fonts}
 
 resolveMathUrl :: Text -> Maybe Text -> IO (Maybe Text)
 resolveMathUrl "none" (Just _) = do
@@ -218,10 +238,13 @@ defaults =
         }
 
 defaultTheme :: Theme
-defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
+defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = [], themePreset = defaultPreset, themeFonts = emptyFonts}
 
 defaultMathMethod :: Text
 defaultMathMethod = "mathjax"
+
+defaultPreset :: Text
+defaultPreset = "aria"
 
 warn :: Text -> IO ()
 warn msg = TIO.hPutStrLn stderr ("warning: " <> msg)

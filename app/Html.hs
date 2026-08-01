@@ -36,7 +36,7 @@ layout cfg navPages meta body =
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
-                        L.a_ [L.href_ "/"] (L.toHtml (siteName cfg))
+                        L.a_ [L.class_ "site-name", L.href_ "/"] (L.toHtml (siteName cfg))
                         mapM_ renderNavPage navPages
                     L.main_ body
                     L.footer_ [L.class_ "site-footer"] $ L.p_ $ do
@@ -231,7 +231,7 @@ renderTags tags = L.span_ [L.class_ "post-tags"] (go tags)
   where
     go :: [Text] -> L.Html ()
     go [single] = renderTag single
-    go (t : rest) = renderTag t >> L.toHtml (" · " :: Text) >> go rest
+    go (t : rest) = renderTag t >> L.span_ [L.class_ "post-tag-sep"] (L.toHtml (" · " :: Text)) >> go rest
     go [] = pure ()
     renderTag :: Text -> L.Html ()
     renderTag tag = L.a_ [L.class_ "post-tag", L.href_ (tagUrl tag)] (L.toHtml tag)

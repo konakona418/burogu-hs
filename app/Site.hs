@@ -3,7 +3,7 @@ module Site (BuildReport (..), build) where
 import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch, throwIO)
-import Css (renderCss)
+import Css (FontFile (..), Fonts (..), renderCss)
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -16,6 +16,7 @@ import Page (CustomPage (..), loadPages)
 import Post (Post (..), mathMethod)
 import Registry (SitePages (..), classifyPages, defaultArchiveTitle, defaultSearchTitle, defaultTagsLabel, navItems, specialPages)
 import Search (renderSearch, renderSearchIndex)
+import Shaft (presetByName)
 import Sitemap (renderSitemap)
 import System.Directory (
     copyFile,
@@ -52,6 +53,7 @@ build paths config posts = do
 buildWork :: Paths -> SiteConfig -> [Post] -> IO BuildReport
 buildWork paths config posts = do
     validateExtraJs paths config
+    validateFontFiles paths config
     let math = mathMethod (themeMath (siteTheme config)) (themeMathUrl (siteTheme config))
     let pagesDir = pSrc paths </> "_pages"
     epages <- loadPages math pagesDir
@@ -133,11 +135,42 @@ writeRedirects paths specials =
 
 writeStyleSheet :: Paths -> SiteConfig -> IO ()
 writeStyleSheet paths config = do
-    extra <- mapM (readExtraCss . T.unpack) (themeExtraCss (siteTheme config))
-    TIO.writeFile (pOut paths </> "style.css") (renderCss extra)
+    let theme = siteTheme config
+        preset = case presetByName (themePreset theme) of
+            Just p -> p
+            Nothing -> error ("unknown theme preset: " <> T.unpack (themePreset theme))
+    extra <- mapM (readExtraCss . T.unpack) (themeExtraCss theme)
+    copyFonts paths (fromMaybe [] (fontsFiles (themeFonts theme)))
+    TIO.writeFile (pOut paths </> "style.css") (renderCss preset (themeFonts theme) extra)
   where
     readExtraCss :: FilePath -> IO Text
     readExtraCss file = TIO.readFile (pSrc paths </> file)
+
+{- | Copy embedded font files into site/fonts/. The @font-face rules
+reference them as /fonts/<basename> (site-root absolute).
+-}
+copyFonts :: Paths -> [FontFile] -> IO ()
+copyFonts paths = mapM_ copyOne
+  where
+    copyOne :: FontFile -> IO ()
+    copyOne ff = do
+        let source = pSrc paths </> T.unpack (ffSrc ff)
+            target = pOut paths </> "fonts" </> T.unpack (basename (ffSrc ff))
+        createDirectoryIfMissing True (pOut paths </> "fonts")
+        copyFile source target
+    basename :: Text -> Text
+    basename = T.reverse . T.takeWhile (/= '/') . T.reverse
+
+validateFontFiles :: Paths -> SiteConfig -> IO ()
+validateFontFiles paths config =
+    mapM_ check (fromMaybe [] (fontsFiles (themeFonts (siteTheme config))))
+  where
+    check :: FontFile -> IO ()
+    check ff = do
+        exists <- doesFileExist (pSrc paths </> T.unpack (ffSrc ff))
+        if exists
+            then pure ()
+            else ioError (userError ("font file not found in " <> pSrc paths <> ": " <> T.unpack (ffSrc ff)))
 
 validateExtraJs :: Paths -> SiteConfig -> IO ()
 validateExtraJs paths config =

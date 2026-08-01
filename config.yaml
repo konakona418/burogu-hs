@@ -8,6 +8,7 @@ siteGeneratedBy: Generated with Burogu
 # deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`
 # srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`
 theme:
+  preset: shaft
   math: mathjax
   mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js
   extraCss: [theme.css]
