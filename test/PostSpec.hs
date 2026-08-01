@@ -2,7 +2,7 @@ module Main where
 
 import Cli (Command (..), Paths (..), cliInfo)
 import Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig)
-import Control.Exception (try)
+import Control.Exception (IOException, try)
 import Css (TokenColor (..), renderCss, tokenColors)
 import Data.ByteString qualified as BS
 import Data.Either (isLeft)
@@ -19,9 +19,9 @@ import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Search (renderSearchIndex)
-import Site (SitePages (..), classifyPages, navItems)
+import Site (BuildReport (..), SitePages (..), build, classifyPages, navItems)
 import Sitemap (renderSitemap)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
@@ -129,6 +129,7 @@ tests =
         , searchIndexExcludesSpecials
         , searchPageRendered
         , searchPageScript
+        , buildKeepsOutputOnPageError
         ]
 
 fullFrontmatter :: TestTree
@@ -904,6 +905,21 @@ searchPageScript =
         assertBool "default search" ("index.forEach" `textIn` page)
         assertBool "highlight helper" ("function highlight" `textIn` page)
         assertBool "snippet helper" ("function snippetAround" `textIn` page)
+
+buildKeepsOutputOnPageError :: TestTree
+buildKeepsOutputOnPageError =
+    testCase "page errors keep the previous output directory" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/build-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/build-out"
+        writeFile "/tmp/burogu-test/build-src/_pages/bad.md" "---\nredirectAs: /bogus/\n---\n# X\n"
+        writeFile "/tmp/burogu-test/build-out/marker.txt" "old"
+        let paths = Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/build-src", pOut = "/tmp/burogu-test/build-out"}
+        result <- try (build paths testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+        marker <- doesFileExist "/tmp/burogu-test/build-out/marker.txt"
+        assertBool "old output kept" marker
 
 escapedPost :: Post
 escapedPost =

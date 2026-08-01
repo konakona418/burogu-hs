@@ -26,6 +26,7 @@ import System.Directory (
     removePathForcibly,
  )
 import System.FilePath ((</>))
+import System.IO.Error (isUserError)
 
 postsDirName :: FilePath
 postsDirName = "posts"
@@ -70,9 +71,12 @@ defaultSearchTitle = "Search"
 build :: Paths -> SiteConfig -> [Post] -> IO BuildReport
 build paths config posts = do
     report <-
-        buildWork paths config posts `catch` \(e :: IOException) -> do
-            removePathForcibly (pOut paths)
-            throwIO e
+        buildWork paths config posts `catch` \(e :: IOException) ->
+            if isUserError e
+                then throwIO e
+                else do
+                    removePathForcibly (pOut paths)
+                    throwIO e
     pure report
 
 buildWork :: Paths -> SiteConfig -> [Post] -> IO BuildReport
@@ -124,7 +128,7 @@ classifyPages pages
             }
     errs = unknownURLErrs <> duplicateErrs <> collisionErrs
     unknownURLErrs =
-        [ "unknown redirectAs '" <> url <> "' in _pages/" <> slug <> ".md (valid: " <> specialURLList <> ")"
+        [ "unknown redirectAs '" <> url <> "' in _pages/" <> slug <> ".md (redirectAs is only for special pages: " <> specialURLList <> "; remove it to make a normal page at " <> "/" <> slug <> "/)"
         | (slug, page) <- specials
         , let url = canonical page
         , url `notElem` map fst specialURLs

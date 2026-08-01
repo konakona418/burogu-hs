@@ -10,6 +10,7 @@ import Site (BuildReport (..), build)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 import System.IO (stderr)
+import System.IO.Error (isUserError)
 
 runBuild :: Paths -> IO ()
 runBuild paths = do
@@ -28,7 +29,9 @@ runBuild paths = do
             case ereport of
                 Left e -> do
                     TIO.hPutStrLn stderr ("Build failed: " <> T.pack (show e))
-                    TIO.hPutStrLn stderr "The output directory was removed; nothing is left to deploy."
+                    if isUserError e
+                        then TIO.hPutStrLn stderr "Nothing was written: the existing output directory was left untouched."
+                        else TIO.hPutStrLn stderr "The output directory was removed; nothing is left to deploy."
                     exitFailure
                 Right report -> printSummary paths (length posts) report
 
