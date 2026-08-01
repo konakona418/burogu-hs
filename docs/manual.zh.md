@@ -27,6 +27,7 @@ burogu - 静态博客生成器
 `new-post`   从模板创建一篇新文章
 `deploy`     构建并部署站点（rsync 或 git）
 `sync`       将站点仓库与 git 远端同步
+`format`     规范化 config.yaml、文章与页面
 `doc`        打印本手册
 
 运行 `burogu --help` 查看全部选项，运行 `burogu doc SECTION`（见
@@ -153,6 +154,30 @@ burogu sync ACTION [REPO]
 
 `ACTION`  push 或 pull
 `REPO`    git 仓库地址（默认：config.yaml 的 `srcRepo`）
+
+### format
+
+规范化 `config.yaml`、全部文章与页面：把缺失的 frontmatter 字段
+补上默认值、按规范顺序排列键、原地重写文件。
+
+```
+burogu format [--dry-run] [--config PATH] [--src DIR]
+```
+
+`--dry-run`  只展示将写内容，不落盘
+
+文章得到 `title, date, tags, description, draft`（frontmatter 没有
+日期时从文件名前缀取；草稿可省略日期）。页面得到 `title,
+priority, hiddenInNavbar, redirectAs`。空的 `description`/
+`redirectAs` 不写入。未知 frontmatter 键保留（按字典序）并警告；
+frontmatter 里的注释不保留。
+
+对 `config.yaml`，format 把它重写为完整文档化模板（每个键带
+默认值与注释、可选节注释示例），并填入你的现有值。未知配置键
+丢弃并警告。
+
+校验失败的文件会报错并跳过，命令以非零码结束。重复运行
+format 不会改变任何内容（幂等）。
 
 ### doc
 

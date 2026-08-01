@@ -1,4 +1,4 @@
-module Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig) where
+module Config (DeployConfig (..), RawConfig (..), RawDeploy (..), RawTheme (..), SiteConfig (..), Theme (..), loadConfig) where
 
 import Control.Exception (IOException, catch)
 import Css (Fonts (..), emptyFonts)

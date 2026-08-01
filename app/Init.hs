@@ -15,42 +15,7 @@ import System.Exit (ExitCode (..), exitFailure)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (stderr)
 import System.Process (cwd, proc, readCreateProcessWithExitCode)
-
-configTemplate :: Text
-configTemplate =
-    T.unlines
-        [ "siteName: burogu"
-        , "baseUrl: https://example.com"
-        , "siteAuthor: Your Name"
-        , "siteDescription: A blog generated with burogu"
-        , "siteLang: zh-CN"
-        , "siteCopyright: © Your Name"
-        , "siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide"
-        , "# deploy:"
-        , "#   target: user@host:/var/www/lizi.moe      # rsync deployment (VPS); either target or repo"
-        , "#   repo: git@github.com:user/site.git       # git deployment (GitHub Pages etc.)"
-        , "#   branch: gh-pages                         # git deployment only; required when repo is set"
-        , "#   commitName: Your Name                    # git deployment only; required (commit identity)"
-        , "#   commitEmail: you@example.com             # git deployment only; required (commit identity)"
-        , "# srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`"
-        , "theme:"
-        , "  preset: aria           # aria | shaft (built-in theme presets)"
-        , "  math: mathjax          # none | mathjax | katex"
-        , "  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js # optional: override the CDN URL"
-        , "  extraCss: [theme.css]"
-        , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
-        , "  # fonts:               # optional: override the preset's font styles"
-        , "  #   body: [\"Helvetica Neue\", \"PingFang SC\", sans-serif]"
-        , "  #   display: [Georgia, \"Noto Serif CJK SC\", \"Songti SC\", SimSun, serif]"
-        , "  #   code: [ui-monospace, Menlo, monospace]"
-        , "  #   size: 17px"
-        , "  #   lineHeight: 28px"
-        , "  #   files:             # optional: embed font files (copied to site/fonts/, @font-face generated)"
-        , "  #     - src: fonts/my-serif.woff2"
-        , "  #       family: My Serif"
-        , "  #       weight: 400"
-        , "  #       style: normal"
-        ]
+import Template (defaultConfigTemplate, emptyConfigValues, renderConfig)
 
 gitignoreTemplate :: Text
 gitignoreTemplate =
@@ -222,7 +187,7 @@ run target = do
         if already
             then TIO.putStrLn ("  " <> T.pack configPath <> " (already exists, left untouched)")
             else do
-                TIO.writeFile configPath configTemplate
+                TIO.writeFile configPath (renderConfig defaultConfigTemplate emptyConfigValues)
                 TIO.putStrLn ("  " <> T.pack configPath)
         initConfigRepo configDir
 

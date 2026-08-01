@@ -27,6 +27,7 @@ Commands:
 `new-post`   create a post from a template
 `deploy`     build and deploy the site (rsync or git)
 `sync`       sync the site repository with a git remote
+`format`     normalize config.yaml, posts and pages
 `doc`        print this manual
 
 Run `burogu --help` for every option, and `burogu doc SECTION` (see
@@ -165,6 +166,34 @@ burogu sync ACTION [REPO]
 
 `ACTION`  push or pull
 `REPO`    git repository URL (default: `srcRepo` from config.yaml)
+
+### format
+
+Normalize `config.yaml`, every post and every page: fill in the
+missing frontmatter fields with their defaults, order the keys
+canonically, and rewrite the files in place.
+
+```
+burogu format [--dry-run] [--config PATH] [--src DIR]
+```
+
+`--dry-run`  show what would change without writing anything
+
+Posts get `title, date, tags, description, draft` (the date comes
+from the filename prefix when the frontmatter has none; drafts may
+omit it). Pages get `title, priority, hiddenInNavbar, redirectAs`.
+Empty `description`/`redirectAs` fields are not written. Unknown
+frontmatter keys are kept (sorted) with a warning; comments in the
+frontmatter are not preserved.
+
+For `config.yaml`, format rewrites the file as the fully documented
+template (every key with a default and a comment, optional sections
+commented) with your current values filled in. Unknown config keys
+are dropped with a warning.
+
+Files that fail validation are reported and skipped; the command
+exits non-zero when any file failed. Re-running format changes
+nothing (idempotent).
 
 ### doc
 

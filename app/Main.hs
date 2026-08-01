@@ -4,6 +4,7 @@ import Build (runBuild)
 import Cli (Command (..), parseCommand)
 import Deploy qualified
 import Doc qualified
+import Format qualified
 import Init qualified
 import NewPost qualified
 import Sync qualified
@@ -24,4 +25,5 @@ main = do
         NewPost slug draft -> NewPost.run slug draft
         Deploy clear -> Deploy.run clear
         Sync action mRepo -> Sync.run action mRepo
+        Format dryRun paths -> Format.run paths dryRun
         Doc section lang color -> Doc.run section lang color

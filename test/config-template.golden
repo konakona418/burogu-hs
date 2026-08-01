@@ -1,9 +1,9 @@
 siteName: burogu  # site title (header, HTML title, og:site_name)
-baseUrl: https://lizi.moe  # site URL (http(s)://); enables the feed and og:url
-siteAuthor: moe li  # author name (default copyright holder)
+baseUrl: https://example.com  # site URL (http(s)://); enables the feed and og:url
+siteAuthor: Your Name  # author name (default copyright holder)
 siteDescription: A blog generated with burogu  # site description (HTML meta tag)
 siteLang: zh-CN  # page language code, e.g. en or zh-CN
-siteCopyright: © moe li  # footer copyright
+siteCopyright: © Your Name  # footer copyright
 siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide
 # deploy:
 #   target: user@host:/var/www/lizi.moe      # rsync deployment (VPS); either target or repo
@@ -13,7 +13,7 @@ siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide
 #   commitEmail: you@example.com             # git deployment only; required (commit identity)
 # srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`
 theme:
-  preset: shaft  # aria | shaft (built-in theme presets)
+  preset: aria  # aria | shaft (built-in theme presets)
   math: mathjax  # none | mathjax | katex
   mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js  # optional: override the CDN URL
   extraCss: [theme.css]

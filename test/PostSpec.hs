@@ -16,6 +16,8 @@ import Data.Text.Lazy qualified as TL
 import Data.Yaml (ParseException, decodeEither')
 import Doc (OutputStyle (..), extractSection, langFromLocale, render, sections)
 import Feed (feedUrl, renderAtom)
+import Format (formatOne)
+import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
 import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
@@ -29,6 +31,7 @@ import Site (BuildReport (..), build)
 import Sitemap (renderSitemap)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode)
+import Template (ConfigValues (..), defaultConfigTemplate, emptyConfigValues, renderConfig)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
@@ -160,6 +163,17 @@ tests =
         , docSectionExtraction
         , docLangFromLocale
         , manualsPresent
+        , frontmatterSplit
+        , frontmatterPostDefaults
+        , frontmatterPageDefaults
+        , frontmatterNoDateError
+        , frontmatterDraftNoDate
+        , frontmatterUnknownKeys
+        , frontmatterDescriptionOmitted
+        , configTemplateGolden
+        , configFormatValues
+        , formatWritesFile
+        , formatDryRunDoesNotWrite
         ]
 
 fullFrontmatter :: TestTree
@@ -1331,3 +1345,105 @@ textIn needle haystack = needle `T.isInfixOf` haystack
 
 notTextIn :: Text -> Text -> Bool
 notTextIn needle haystack = not (needle `T.isInfixOf` haystack)
+
+frontmatterSplit :: TestTree
+frontmatterSplit =
+    testCase "frontmatter is split from the body" $ do
+        assertEqual "with frontmatter" (Just "title: X\n", "body here\n") (splitFrontmatter "---\ntitle: X\n---\nbody here\n")
+        assertEqual "without frontmatter" (Nothing, "no fm\n") (splitFrontmatter "no fm\n")
+        assertEqual "unclosed" (Nothing, "---\ntitle: X\n") (splitFrontmatter "---\ntitle: X\n")
+
+frontmatterPostDefaults :: TestTree
+frontmatterPostDefaults =
+    testCase "posts get every field with defaults" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "title: Post\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, unknown) -> do
+                assertEqual "canonical order" "title: Post\ndate: 2026-08-01\ntags: []\ndraft: false\n" fm
+                assertEqual "no unknown keys" [] unknown
+
+frontmatterPageDefaults :: TestTree
+frontmatterPageDefaults =
+    testCase "pages get every field with defaults" $ do
+        case normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertEqual "canonical order" "title: About\npriority: 100\nhiddenInNavbar: false\n" fm
+
+frontmatterNoDateError :: TestTree
+frontmatterNoDateError =
+    testCase "a post without any date is an error" $ do
+        assertBool "error" (isLeft (normalizeFrontmatter PostKind "/tmp/x/no-date.md" "title: X\n"))
+
+frontmatterDraftNoDate :: TestTree
+frontmatterDraftNoDate =
+    testCase "a draft without a date omits the date key" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/draft.md" "title: X\ndraft: true\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertEqual "no date key" "title: X\ntags: []\ndraft: true\n" fm
+
+frontmatterUnknownKeys :: TestTree
+frontmatterUnknownKeys =
+    testCase "unknown keys are kept in sorted order" $ do
+        case normalizeFrontmatter PageKind "/tmp/x/p.md" "custom: 42\ntitle: X\naliases: [a, b]\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, unknown) -> do
+                assertEqual "unknown keys" ["aliases", "custom"] unknown
+                assertEqual "kept after known" "title: X\npriority: 100\nhiddenInNavbar: false\naliases:\n  - a\n  - b\ncustom: 42\n" fm
+
+frontmatterDescriptionOmitted :: TestTree
+frontmatterDescriptionOmitted =
+    testCase "an empty description is not written" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-p.md" "title: X\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertBool "no description" ("description" `notTextIn` fm)
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-p.md" "title: X\ndescription: Hello\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertEqual "description written" "title: X\ndate: 2026-08-01\ntags: []\ndescription: Hello\ndraft: false\n" fm
+
+configTemplateGolden :: TestTree
+configTemplateGolden =
+    testCase "the config template renders to the golden output" $ do
+        golden <- TIO.readFile "test/config-template.golden"
+        assertEqual "golden" golden (renderConfig defaultConfigTemplate emptyConfigValues)
+
+configFormatValues :: TestTree
+configFormatValues =
+    testCase "format values substitute into the template" $ do
+        let values =
+                ConfigValues
+                    { cvTop = [("siteName", "myblog"), ("baseUrl", "https://lizi.moe")]
+                    , cvDeploy = Just [("target", "user@host:/var/www/x")]
+                    , cvSrcRepo = Just "git@github.com:user/site.git"
+                    , cvTheme = [("preset", "shaft"), ("extraCss", "[theme.css]")]
+                    , cvExtraJs = Just "[theme.js]"
+                    , cvFonts = Just [("size", "18px")]
+                    , cvFontsFiles = Just "files:\n  - src: fonts/my.woff2\n    family: My Serif\n    weight: 400\n    style: normal\n"
+                    }
+            rendered = renderConfig defaultConfigTemplate values
+        assertBool "value" ("siteName: myblog" `textIn` rendered)
+        assertBool "deploy block" ("deploy:\n  target: user@host:/var/www/x" `textIn` rendered)
+        assertBool "srcRepo real" ("srcRepo: git@github.com:user/site.git" `textIn` rendered)
+        assertBool "theme value" ("  preset: shaft" `textIn` rendered)
+        assertBool "extraJs real" ("  extraJs: [theme.js]" `textIn` rendered)
+        assertBool "fonts block" ("  fonts:\n    size: 18px" `textIn` rendered)
+        assertBool "fonts files" ("      - src: fonts/my.woff2" `textIn` rendered)
+
+formatWritesFile :: TestTree
+formatWritesFile =
+    testCase "format rewrites a post file in place" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/fmt-write/_post"
+        writeFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md" "---\ntitle: Hello\n---\n\nbody\n"
+        result <- formatOne False "/tmp/burogu-test/fmt-write/_post" PostKind "2026-08-01-hello.md"
+        assertEqual "no errors" False result
+        content <- readFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md"
+        assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\n---\n\nbody\n" (T.pack content)
+
+formatDryRunDoesNotWrite :: TestTree
+formatDryRunDoesNotWrite =
+    testCase "dry-run leaves files untouched" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/fmt-dry/_post"
+        writeFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md" "---\ntitle: Hello\n---\n\nbody\n"
+        result <- formatOne True "/tmp/burogu-test/fmt-dry/_post" PostKind "2026-08-01-hello.md"
+        assertEqual "no errors" False result
+        content <- readFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md"
+        assertEqual "untouched" "---\ntitle: Hello\n---\n\nbody\n" (T.pack content)

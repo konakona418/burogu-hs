@@ -20,6 +20,8 @@ executable burogu
                     , Doc
                     , Deploy
                     , Feed
+                    , Format
+                    , Frontmatter
                     , Html
                     , Init
                     , NewPost
@@ -33,6 +35,7 @@ executable burogu
                     , Sitemap
                     , Site
                     , Sync
+                    , Template
                     , Watch
     hs-source-dirs:   app
     default-language: GHC2021
@@ -54,6 +57,7 @@ executable burogu
                     , scientific >=0.3.7.0 && <0.4
                     , text >=2.0.2 && <2.1
                     , time >=1.12.2 && <1.13
+                    , vector >=0.13.1.0 && <0.14
                     , yaml >=0.11.11.2 && <0.12
 
 test-suite burogu-test
@@ -66,6 +70,8 @@ test-suite burogu-test
                     , Doc
                     , Deploy
                     , Feed
+                    , Format
+                    , Frontmatter
                     , Html
                     , Init
                     , NewPost
@@ -79,6 +85,7 @@ test-suite burogu-test
                     , Sitemap
                     , Site
                     , Sync
+                    , Template
                     , Watch
     hs-source-dirs:   test
                     , app
@@ -103,4 +110,5 @@ test-suite burogu-test
                     , tasty-hunit >=0.10.2 && <0.11
                     , text >=2.0.2 && <2.1
                     , time >=1.12.2 && <1.13
+                    , vector >=0.13.1.0 && <0.14
                     , yaml >=0.11.11.2 && <0.12

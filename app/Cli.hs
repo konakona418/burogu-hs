@@ -23,6 +23,7 @@ data Command
     | NewPost {nSlug :: Text, nDraft :: Bool}
     | Deploy {dClearCache :: Bool}
     | Sync {sAction :: Text, sRepo :: Maybe Text}
+    | Format {fDryRun :: Bool, fPaths :: Paths}
     | Doc {dSection :: Maybe Text, dLang :: Maybe Text, dColor :: Maybe Text}
 
 parseCommand :: IO Command
@@ -47,6 +48,7 @@ commands =
         <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
         <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
+        <> command "format" (info (Format <$> dryRunParser <*> pathsParser) (progDesc "Normalize config.yaml, posts and pages (frontmatter defaults, canonical order)"))
         <> command "doc" (info (Doc <$> sectionParser <*> langParser <*> colorParser) (progDesc "Print the man-style manual (en/zh, sections, ANSI styling)"))
 
 pathsParser :: Parser Paths
@@ -122,6 +124,9 @@ draftParser = switch (long "draft" <> help "Create a draft (no date)")
 
 clearCacheParser :: Parser Bool
 clearCacheParser = switch (long "clear-cache" <> help "Remove the persistent git cache (next deploy re-fetches from scratch)")
+
+dryRunParser :: Parser Bool
+dryRunParser = switch (long "dry-run" <> help "Show what would change without writing anything")
 
 actionParser :: Parser Text
 actionParser = strArgument (metavar "ACTION" <> help "push or pull")

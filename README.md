@@ -11,6 +11,7 @@ cabal run burogu -- preview               # build, then view at http://127.0.0.1
 cabal run burogu -- new-post hello        # create a new post
 cabal run burogu -- deploy                # build and deploy per config.yaml (rsync or git)
 cabal run burogu -- sync push             # sync the site repo with a git remote
+cabal run burogu -- format --dry-run      # preview frontmatter/config normalization
 cabal run burogu -- doc                   # view the man-page style manual
 ```
 
