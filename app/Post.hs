@@ -26,6 +26,7 @@ data Post = Post
     , postDescription :: Maybe Text
     , postDraft :: Bool
     , postBodyHtml :: Text
+    , postText :: Text
     , postHasMath :: Bool
     }
     deriving (Eq, Show)
@@ -75,7 +76,7 @@ parsePost math path content = do
                 Left err -> pure (Left err)
                 Right fields -> do
                     ebody <- runIO (writeHtml5String (writerOpts math) doc)
-                    pure (either (Left . T.pack . show) (Right . mkPost fields) ebody)
+                    pure (either (Left . T.pack . show) (Right . mkPost fields (bodyText doc)) ebody)
   where
     name = T.pack (takeFileName path)
 
@@ -116,8 +117,8 @@ extractMeta name (Pandoc meta body) = do
             Nothing -> Left "field 'description' must be a string"
     pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft, pfHasMath = hasMath}
 
-mkPost :: PostFields -> Text -> Post
-mkPost fields body =
+mkPost :: PostFields -> Text -> Text -> Post
+mkPost fields text body =
     Post
         { postSlug = pfSlug fields
         , postTitle = pfTitle fields
@@ -126,6 +127,7 @@ mkPost fields body =
         , postDescription = pfDescription fields
         , postDraft = pfDraft fields
         , postBodyHtml = body
+        , postText = text
         , postHasMath = pfHasMath fields
         }
 
@@ -153,6 +155,10 @@ metaText :: MetaValue -> Maybe Text
 metaText (MetaString t) = Just t
 metaText (MetaInlines inlines) = Just (stringify inlines)
 metaText _ = Nothing
+
+-- | Plain text of the document body, excluding the frontmatter meta.
+bodyText :: Pandoc -> Text
+bodyText (Pandoc _ body) = stringify body
 
 tagOf :: MetaValue -> Either Text Text
 tagOf value = maybe (Left "field 'tags' must be a list of strings") Right (metaText value)

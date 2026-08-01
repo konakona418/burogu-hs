@@ -26,6 +26,7 @@ data CustomPage = CustomPage
     , cpHasMath :: Bool
     , cpPriority :: Int
     , cpRedirectAs :: Maybe Text
+    , cpText :: Text
     }
     deriving (Eq, Show)
 
@@ -53,7 +54,7 @@ loadPage math path = do
                                 Right body -> case pagePriority doc of
                                     Left err -> pure (Left err)
                                     Right priority ->
-                                        pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc}))
+                                        pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc, cpText = bodyText doc}))
 
 {- | Load all custom pages from a directory of markdown files. Each file
 becomes a page keyed by its basename without the .md extension; slugs
@@ -114,3 +115,7 @@ metaText :: MetaValue -> Maybe Text
 metaText (MetaString t) = Just t
 metaText (MetaInlines inlines) = Just (stringify inlines)
 metaText _ = Nothing
+
+-- | Plain text of the document body, excluding the frontmatter meta.
+bodyText :: Pandoc -> Text
+bodyText (Pandoc _ body) = stringify body

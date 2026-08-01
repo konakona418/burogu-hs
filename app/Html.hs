@@ -1,4 +1,4 @@
-module Html (PageMeta (..), groupByTag, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
+module Html (PageMeta (..), groupByTag, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderSearch, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
 
 import Config (SiteConfig (..), Theme (..))
 import Data.Map.Strict qualified as Map
@@ -148,6 +148,54 @@ renderRedirect target =
                     L.p_ $ L.toHtml ("Redirecting to " :: Text)
                     L.a_ [L.href_ target] (L.toHtml target)
             )
+
+{- | The search page: an input and a results container, wired up by an
+inline script that searches /search.json client-side. The script is a
+no-op when a user script (e.g. theme.extraJs) defines window.buroguSearch.
+-}
+renderSearch :: SiteConfig -> [(Text, Text)] -> Text -> L.Html ()
+renderSearch cfg navPages title = layout cfg navPages pageMeta $ do
+    L.input_ [L.class_ "search-input", L.type_ "search", LB.makeAttribute "placeholder" "Search…", LB.makeAttribute "autofocus" ""]
+    L.ul_ [L.class_ "post-list", L.id_ "search-results"] (pure ())
+    L.script_ (searchScript :: Text)
+  where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = title, pmOgType = "website", pmOgPath = "/search/", pmOgDescription = Nothing, pmHasMath = False}
+
+searchScript :: Text
+searchScript =
+    T.unlines
+        [ "document.addEventListener(\"DOMContentLoaded\", function () {"
+        , " if (window.buroguSearch) {"
+        , "  window.buroguSearch({ url: \"/search.json\" });"
+        , "  return;"
+        , " }"
+        , " var input = document.querySelector(\".search-input\");"
+        , " var list = document.getElementById(\"search-results\");"
+        , " fetch(\"/search.json\").then(function (r) { return r.json(); }).then(function (index) {"
+        , "  input.addEventListener(\"input\", function () {"
+        , "   var q = input.value.trim().toLowerCase();"
+        , "   while (list.firstChild) { list.removeChild(list.firstChild); }"
+        , "   if (!q) { return; }"
+        , "   index.forEach(function (entry) {"
+        , "    var hay = (entry.title + \" \" + entry.text).toLowerCase();"
+        , "    if (hay.indexOf(q) === -1) { return; }"
+        , "    var li = document.createElement(\"li\");"
+        , "    li.className = \"post-item\";"
+        , "    var a = document.createElement(\"a\");"
+        , "    a.href = entry.url;"
+        , "    a.textContent = entry.title;"
+        , "    li.appendChild(a);"
+        , "    var p = document.createElement(\"p\");"
+        , "    p.className = \"post-desc\";"
+        , "    p.textContent = entry.date ? entry.date + \" — \" + entry.text.slice(0, 80) : entry.text.slice(0, 80);"
+        , "    li.appendChild(p);"
+        , "    list.appendChild(li);"
+        , "   });"
+        , "  });"
+        , " });"
+        , "});"
+        ]
 
 renderIndex :: SiteConfig -> [(Text, Text)] -> [Post] -> L.Html ()
 renderIndex cfg navPages posts = layout cfg navPages pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)

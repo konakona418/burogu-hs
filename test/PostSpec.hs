@@ -13,11 +13,12 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
+import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderSearch, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
+import Search (renderSearchIndex)
 import Site (SitePages (..), classifyPages, navItems)
 import Sitemap (renderSitemap)
 import System.Directory (createDirectoryIfMissing)
@@ -123,6 +124,11 @@ tests =
         , archiveYearGroups
         , redirectPageMetaRefresh
         , tagsLabelRejected
+        , searchIndexShape
+        , searchIndexEscaping
+        , searchIndexExcludesSpecials
+        , searchPageRendered
+        , searchPageScript
         ]
 
 fullFrontmatter :: TestTree
@@ -721,7 +727,7 @@ pageRedirectAsParsed =
             _ -> assertBool "expected a page" False
 
 mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
-mkPage title priority redirect = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect}
+mkPage title priority redirect = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpText = ""}
 
 classifySpecialPages :: TestTree
 classifySpecialPages =
@@ -848,6 +854,55 @@ tagsLabelRejected =
             Left _ -> assertBool "rejected" True
             Right _ -> assertBool "expected failure" False
 
+searchIndexShape :: TestTree
+searchIndexShape =
+    testCase "search index carries posts with date/tags and pages without" $ do
+        let post = (postWithTags ["essay"]){postTitle = "Hello", postText = "some body text"}
+            page = ("about", mkPage (Just "About") 0 Nothing)
+        let json = renderSearchIndex [post] [page]
+        assertBool "post title" ("\"title\":\"Hello\"" `textIn` json)
+        assertBool "post url" ("\"url\":\"/posts/test/\"" `textIn` json)
+        assertBool "post date" ("\"date\":\"2026-01-01\"" `textIn` json)
+        assertBool "post tags" ("\"tags\":[\"essay\"]" `textIn` json)
+        assertBool "post text" ("\"text\":\"some body text\"" `textIn` json)
+        assertBool "page title" ("\"title\":\"About\"" `textIn` json)
+        assertBool "page url" ("\"url\":\"/about/\"" `textIn` json)
+        let aboutTitle = findSubstring "\"title\":\"About\"" json
+            aboutUrl = findSubstring "\"url\":\"/about/\"" json
+            datePos = findSubstring "\"date\"" json
+        assertBool "page has no date between title and url" (aboutTitle < aboutUrl && not (aboutTitle < datePos && datePos < aboutUrl))
+
+searchIndexEscaping :: TestTree
+searchIndexEscaping =
+    testCase "search index escapes quotes and backslashes" $ do
+        let post = (postWithTags []){postTitle = "A \"quoted\" \\ title", postText = "back\\slash"}
+        let json = renderSearchIndex [post] []
+        assertBool "escaped quotes" ("A \\\"quoted\\\" \\\\ title" `textIn` json)
+        assertBool "escaped backslash" ("back\\\\slash" `textIn` json)
+
+searchIndexExcludesSpecials :: TestTree
+searchIndexExcludesSpecials =
+    testCase "search index is built only from the pages the caller passes" $ do
+        let json = renderSearchIndex [] [("about", mkPage Nothing 0 Nothing)]
+        assertBool "about included" ("/about/" `textIn` json)
+        assertBool "no tags entry" ("/tags/" `notTextIn` json)
+
+searchPageRendered :: TestTree
+searchPageRendered =
+    testCase "search page renders input and results container" $ do
+        let page = renderHtml (renderSearch testConfig [] "Search")
+        assertBool "title" ("<title>Search</title>" `textIn` page)
+        assertBool "input" ("class=\"search-input\"" `textIn` page)
+        assertBool "results" ("id=\"search-results\"" `textIn` page)
+
+searchPageScript :: TestTree
+searchPageScript =
+    testCase "search page script fetches the index and honors the hook" $ do
+        let page = renderHtml (renderSearch testConfig [] "Search")
+        assertBool "fetch" ("/search.json" `textIn` page)
+        assertBool "hook" ("window.buroguSearch" `textIn` page)
+        assertBool "default search" ("index.forEach" `textIn` page)
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -920,6 +975,7 @@ postWithTags tags =
         , postDescription = Nothing
         , postDraft = False
         , postBodyHtml = ""
+        , postText = ""
         , postHasMath = False
         }
 

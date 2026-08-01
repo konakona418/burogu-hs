@@ -101,6 +101,20 @@ archiveTemplate =
         , "<!-- Archive page: burogu generates a yearly timeline of all posts here. -->"
         ]
 
+searchTemplate :: Text
+searchTemplate =
+    T.unlines
+        [ "---"
+        , "title: Search"
+        , "redirectAs: /search/"
+        , "priority: 40"
+        , "---"
+        , ""
+        , "<!-- Search page: burogu generates a client-side search UI here,"
+        , "     backed by search.json. Define window.buroguSearch in theme.extraJs"
+        , "     to replace the built-in search script. -->"
+        ]
+
 samplePost :: Text
 samplePost =
     T.unlines
@@ -175,6 +189,7 @@ run target = do
         TIO.writeFile (target </> "_pages" </> "about.md") aboutTemplate
         TIO.writeFile (target </> "_pages" </> "tags.md") tagsTemplate
         TIO.writeFile (target </> "_pages" </> "archive.md") archiveTemplate
+        TIO.writeFile (target </> "_pages" </> "search.md") searchTemplate
         TIO.writeFile (target </> "CNAME") "example.com\n"
         TIO.writeFile (target </> "theme.css") themeCss
         writeConfig
@@ -184,6 +199,7 @@ run target = do
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/about.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/tags.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/archive.md")
+        TIO.putStrLn ("  " <> T.pack target <> "/_pages/search.md")
         TIO.putStrLn ("  " <> T.pack target <> "/CNAME")
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"

@@ -117,6 +117,7 @@ baseTokens =
     , ("color-link", "#0066cc")
     , ("color-link-hover", "#0055aa")
     , ("color-code-bg", "#f5f5f5")
+    , ("color-mark", "#ffe58f")
     , ("font-family", "\"Helvetica Neue\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif")
     , ("font-size", "17px")
     , ("line-height", "28px")
@@ -137,6 +138,7 @@ darkTokenValues =
     , ("color-link", "#6ab0f3")
     , ("color-link-hover", "#8cc2f5")
     , ("color-code-bg", "#2d2d2d")
+    , ("color-mark", "#8a7000")
     ]
         <> [("token-" <> tcClass tc, tcDark tc) | tc <- tokenColors]
 
@@ -185,6 +187,20 @@ baseRules = do
     C.nav C.? ("margin-bottom" C.-: "var(--space-nav-gap)")
     C.nav C.? C.a C.? ("margin-right" C.-: "var(--space-nav-link)")
     C.a C.# ("aria-hidden" C.@= "true") C.? C.display C.none
+    C.mark C.? do
+        "background-color" C.-: "var(--color-mark)"
+        "color" C.-: "var(--color-text)"
+    (".search-input" :: C.Selector) C.? do
+        C.display C.block
+        "width" C.-: "100%"
+        "box-sizing" C.-: "border-box"
+        "padding" C.-: "8px 12px"
+        "font-size" C.-: "var(--font-size)"
+        "background-color" C.-: "var(--color-code-bg)"
+        "color" C.-: "var(--color-text)"
+        "border" C.-: "1px solid var(--color-muted)"
+        "border-radius" C.-: "4px"
+        "margin-bottom" C.-: "var(--space-nav-gap)"
 
 tokenRules :: C.Css
 tokenRules = mapM_ tokenRule tokenColors
