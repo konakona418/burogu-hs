@@ -615,10 +615,9 @@ copyrightCustom =
 
 footerCreditShown :: TestTree
 footerCreditShown =
-    testCase "footer shows the configured generator credit" $ do
+    testCase "footer shows the configured generator credit on the same line" $ do
         let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [])
-        assertBool "credit text" ("Generated with Burogu" `textIn` page)
-        assertBool "credit class" ("class=\"site-credit\"" `textIn` page)
+        assertBool "joined line" ("© moe li · Generated with Burogu" `textIn` page)
 
 footerCreditHidden :: TestTree
 footerCreditHidden =

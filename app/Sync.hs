@@ -2,27 +2,20 @@ module Sync (run) where
 
 import Cli (Paths (..), defaultPaths)
 import Config (SiteConfig (..), loadConfig)
-import Control.Exception (bracket)
 import Control.Monad (unless)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
-import Data.Time.LocalTime (getCurrentTimeZone, utcToLocalTime)
-import System.Directory (
-    copyFile,
-    createDirectory,
-    doesDirectoryExist,
-    getTemporaryDirectory,
-    listDirectory,
-    removePathForcibly,
- )
 import System.Exit (ExitCode (..), exitFailure)
-import System.FilePath ((</>))
 import System.IO (stderr)
-import System.Process (cwd, proc, readCreateProcessWithExitCode)
+import System.Process (proc, readCreateProcessWithExitCode)
 
+{- | Sync the site repository (the directory containing config.yaml and
+src/) with a remote git repo. Runs git in the current directory; the
+remote URL comes from the argument, falling back to config's srcRepo.
+-}
 run :: Text -> Maybe Text -> IO ()
 run action mRepo = do
     config <- loadConfig (pConfig defaultPaths)
@@ -39,66 +32,71 @@ run action mRepo = do
                 TIO.hPutStrLn stderr ("error: unknown action " <> action <> " (expected push or pull)")
                 exitFailure
 
-withClone :: Text -> (FilePath -> IO a) -> IO a
-withClone repo k = do
-    tmp <- getTemporaryDirectory
-    let clone = tmp </> "burogu-sync"
-    removePathForcibly clone
-    runGit "" ["clone", "--quiet", T.unpack repo, clone]
-    bracket (pure clone) removePathForcibly k
-
-runGit :: FilePath -> [String] -> IO ()
-runGit dir args = do
-    (code, out, err) <- readCreateProcessWithExitCode (proc "git" args){cwd = if null dir then Nothing else Just dir} ""
-    unless (code == ExitSuccess) $ do
-        TIO.hPutStrLn stderr (T.pack out)
-        TIO.hPutStrLn stderr (T.pack err)
-        exitFailure
-
-pull :: Text -> IO ()
-pull repo = withClone repo $ \clone -> do
-    removePathForcibly "src"
-    createDirectory "src"
-    copyTree clone "src" False
-    TIO.putStrLn ("pulled src/ from " <> repo)
+{- | Point the origin remote at the given URL: set-url when origin
+already exists, add otherwise.
+-}
+ensureRemote :: Text -> IO ()
+ensureRemote repo = do
+    (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["remote", "get-url", "origin"]) ""
+    let url = T.unpack repo
+    if code == ExitSuccess
+        then runGit ["remote", "set-url", "origin", url]
+        else runGit ["remote", "add", "origin", url]
 
 push :: Text -> IO ()
-push repo = withClone repo $ \clone -> do
-    runGit clone ["rm", "-rq", "--ignore-unmatch", "."]
-    copyTree "src" clone False
-    runGit clone ["add", "-A"]
-    (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]){cwd = Just clone} ""
-    if code == ExitSuccess
+push repo = do
+    ensureRemote repo
+    runGit ["add", "-A"]
+    (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]) ""
+    unless (code == ExitSuccess) $ do
+        message <- syncMessage
+        runGit ["commit", "-q", "-m", message]
+    synced <- sameAsRemote
+    if code == ExitSuccess && synced
         then TIO.putStrLn "nothing to push"
         else do
-            message <- syncMessage
-            runGit clone ["commit", "-q", "-m", message]
-            runGit clone ["push", "--quiet", "origin", "HEAD"]
-            TIO.putStrLn ("pushed src/ to " <> repo)
+            runGit ["push", "--quiet", "origin", "HEAD"]
+            TIO.putStrLn ("pushed site to " <> repo)
+sameAsRemote :: IO Bool
+sameAsRemote = do
+    local <- revParse "HEAD"
+    remote <- revParse =<< remoteRef
+    pure (local == remote)
+
+{- | The remote ref tracking HEAD: origin/<current-branch>, falling back
+to origin/HEAD (e.g. detached HEAD).
+-}
+remoteRef :: IO String
+remoteRef = do
+    mBranch <- gitOut ["symbolic-ref", "--quiet", "--short", "HEAD"]
+    pure (maybe "origin/HEAD" ("origin/" <>) mBranch)
+
+revParse :: String -> IO (Maybe String)
+revParse ref = gitOut ["rev-parse", "--quiet", "--verify", ref]
+
+gitOut :: [String] -> IO (Maybe String)
+gitOut args = do
+    (code, out, _) <- readCreateProcessWithExitCode (proc "git" args) ""
+    pure (if code == ExitSuccess then Just (head (lines out)) else Nothing)
+
+{- | Remote wins: fetch and hard-reset the whole site (config + src) to
+the remote's HEAD.
+-}
+pull :: Text -> IO ()
+pull repo = do
+    ensureRemote repo
+    runGit ["fetch", "--quiet", "origin"]
+    ref <- remoteRef
+    runGit ["reset", "--hard", ref]
+    TIO.putStrLn ("pulled site from " <> repo)
 
 syncMessage :: IO String
-syncMessage = do
-    now <- getCurrentTime
-    zone <- getCurrentTimeZone
-    pure (formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" (utcToLocalTime zone now))
+syncMessage = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" <$> getCurrentTime
 
-{- | Recursively copy the contents of a directory. When @keepDotGit@ is
-False the source's .git directory is skipped.
--}
-copyTree :: FilePath -> FilePath -> Bool -> IO ()
-copyTree srcBase dstBase keepDotGit = do
-    entries <- listDirectory srcBase
-    mapM_ copyOne (filter keep entries)
-  where
-    keep :: FilePath -> Bool
-    keep name = keepDotGit || name /= ".git"
-    copyOne :: FilePath -> IO ()
-    copyOne name = do
-        let source = srcBase </> name
-            target = dstBase </> name
-        isDir <- doesDirectoryExist source
-        if isDir
-            then do
-                createDirectory target
-                copyTree source target keepDotGit
-            else copyFile source target
+runGit :: [String] -> IO ()
+runGit args = do
+    (code, out, err) <- readCreateProcessWithExitCode (proc "git" args) ""
+    unless (code == ExitSuccess) $ do
+        TIO.putStrLn (T.pack out)
+        TIO.hPutStrLn stderr (T.pack err)
+        exitFailure

@@ -1,5 +1,7 @@
 module Init (run) where
 
+import Control.Exception (IOException, try)
+import Control.Monad (unless)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -9,9 +11,10 @@ import System.Directory (
     doesFileExist,
     listDirectory,
  )
-import System.Exit (exitFailure)
+import System.Exit (ExitCode (..), exitFailure)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (stderr)
+import System.Process (cwd, proc, readCreateProcessWithExitCode)
 
 configTemplate :: Text
 configTemplate =
@@ -31,6 +34,13 @@ configTemplate =
         , "  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js # optional: override the CDN URL"
         , "  extraCss: [theme.css]"
         , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
+        ]
+
+gitignoreTemplate :: Text
+gitignoreTemplate =
+    T.unlines
+        [ "# build output"
+        , "/site"
         ]
 
 aboutTemplate :: Text
@@ -142,10 +152,41 @@ run target = do
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"
     writeConfig = do
-        let configPath = takeDirectory target </> "config.yaml"
+        let configDir = takeDirectory target
+            configPath = configDir </> "config.yaml"
         already <- doesFileExist configPath
         if already
             then TIO.putStrLn ("  " <> T.pack configPath <> " (already exists, left untouched)")
             else do
                 TIO.writeFile configPath configTemplate
                 TIO.putStrLn ("  " <> T.pack configPath)
+        initConfigRepo configDir
+
+{- | Make sure the directory holding config.yaml is a git repository,
+so the whole site (config + src) is version-controlled; only the build
+output is ignored. Creates an initial commit. No-op when the directory
+is already inside a work tree.
+-}
+initConfigRepo :: FilePath -> IO ()
+initConfigRepo configDir = do
+    inTree <- gitOk configDir ["rev-parse", "--is-inside-work-tree"]
+    if inTree
+        then TIO.putStrLn ("  " <> T.pack configDir <> " (already inside a git repo, left untouched)")
+        else do
+            inited <- gitOk configDir ["init", "--quiet"]
+            if inited
+                then do
+                    TIO.writeFile (configDir </> ".gitignore") gitignoreTemplate
+                    added <- gitOk configDir ["add", "-A"]
+                    committed <- gitOk configDir ["commit", "-q", "-m", "init: site scaffold"]
+                    TIO.putStrLn ("  " <> T.pack configDir <> "/.git + .gitignore (initialized)")
+                    unless (added && committed) $
+                        TIO.hPutStrLn stderr "warning: initial commit failed; set git user.name/user.email and run `git commit` manually"
+                else TIO.hPutStrLn stderr "warning: git not available; skipping repository initialization"
+
+gitOk :: FilePath -> [String] -> IO Bool
+gitOk dir args = do
+    result <- try (readCreateProcessWithExitCode (proc "git" args){cwd = Just dir} "") :: IO (Either IOException (ExitCode, String, String))
+    case result of
+        Left _ -> pure False
+        Right (code, _, _) -> pure (code == ExitSuccess)
