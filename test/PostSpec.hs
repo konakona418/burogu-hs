@@ -14,7 +14,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Yaml (ParseException, decodeEither')
-import Doc (OutputStyle (..), extractSection, langFromLocale, render, sections)
+import Doc (OutputStyle (..), extractSection, langFromLocale, manualContent, render, sections)
 import Feed (feedUrl, renderAtom)
 import Format (formatOne)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
@@ -1243,17 +1243,13 @@ docLangFromLocale =
 
 manualsPresent :: TestTree
 manualsPresent =
-    testCase "both manuals ship and cover every section" $ do
+    testCase "both embedded manuals cover every section" $ do
         mapM_ check ["en", "zh"]
   where
     required = ["name", "synopsis", "description", "commands", "configuration", "site layout", "search", "deployment", "sync", "files", "exit status", "see also"]
     check :: Text -> IO ()
     check lang = do
-        path <- getDataFileName ("docs/manual." <> T.unpack lang <> ".md")
-        exists <- doesFileExist path
-        assertBool (T.unpack lang <> " manual present") exists
-        content <- TIO.readFile path
-        let names = map fst (sections content)
+        let names = map fst (sections (manualContent lang))
         assertBool (T.unpack lang <> " manual complete") (all (`elem` names) required)
 
 escapedPost :: Post

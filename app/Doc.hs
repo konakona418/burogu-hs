@@ -1,14 +1,16 @@
-module Doc (OutputStyle (..), extractSection, langFromLocale, render, run, sections) where
+{-# LANGUAGE TemplateHaskell #-}
+
+module Doc (OutputStyle (..), extractSection, langFromLocale, manualContent, render, run, sections) where
 
 import Control.Exception (IOException, catch)
+import Data.FileEmbed (embedFile)
 import Data.List (minimumBy)
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8)
 import Data.Text.IO qualified as TIO
-import Paths_burogu (getDataFileName)
-import System.Directory (doesFileExist)
 import System.Environment (getEnv)
 import System.Exit (exitFailure)
 import System.IO (hIsTerminalDevice, hPutStrLn, stderr, stdout)
@@ -19,18 +21,28 @@ data Segment = SegText Text | SegBold Text | SegCode Text | SegLink Text Text
 
 data BlockState = Normal | Fence
 
+{- | The manuals are embedded into the binary at compile time, so the
+installed binary needs no data files.
+-}
+manualEn :: Text
+manualEn = decodeUtf8 manualEnBytes
+  where
+    manualEnBytes = $(embedFile "docs/manual.en.md")
+
+manualZh :: Text
+manualZh = decodeUtf8 manualZhBytes
+  where
+    manualZhBytes = $(embedFile "docs/manual.zh.md")
+
+manualContent :: Text -> Text
+manualContent lang = case lang of
+    "zh" -> manualZh
+    _ -> manualEn
+
 run :: Maybe Text -> Maybe Text -> Maybe Text -> IO ()
 run mSection mLang mColor = do
     lang <- resolveLang mLang
-    path <- manualPath lang
-    exists <- doesFileExist path
-    chosen <- case (exists, mLang) of
-        (True, _) -> pure path
-        (False, Just _) -> die (T.unpack lang <> " manual is not available in this installation")
-        (False, Nothing) -> do
-            warn ("the " <> lang <> " manual is not available in this installation; falling back to English")
-            manualPath "en"
-    content <- TIO.readFile chosen
+    let content = manualContent lang
     style <- resolveStyle mColor
     body <- case mSection of
         Nothing -> pure content
@@ -80,9 +92,6 @@ listToMaybeEnv (v : vs)
 
 tryGet :: String -> IO (Maybe Text)
 tryGet key = (Just . T.pack <$> getEnv key) `catch` \(_ :: IOException) -> pure Nothing
-
-manualPath :: Text -> IO FilePath
-manualPath lang = getDataFileName ("docs/manual." <> T.unpack lang <> ".md")
 
 resolveStyle :: Maybe Text -> IO OutputStyle
 resolveStyle (Just mode)
@@ -255,9 +264,6 @@ tokenize t = case firstMarker t of
                         (url, rest'')
                             | T.null rest'' -> Nothing
                             | otherwise -> Just (pre, T.drop 1 rest'', SegLink label url)
-
-warn :: Text -> IO ()
-warn msg = TIO.hPutStrLn stderr ("warning: " <> msg)
 
 die :: String -> IO a
 die msg = do
