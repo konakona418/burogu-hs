@@ -1,7 +1,7 @@
 <!--
 Authoring constraints for this manual (the doc renderer only understands
 this subset):
-- `#` document title, `##` section headings, `###` subsection headings.
+- `#` document title, `##` section headings, `###`/`####` subsection headings.
 - Inline markup: `**bold**`, `code`, links [text](url).
 - Code blocks are fenced with ``` (optionally a language tag).
 - Lists use `- `. Wrap lines at 80 columns. Do not use tables.

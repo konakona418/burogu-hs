@@ -149,6 +149,7 @@ tests =
         , fontFileMissingKeepsOldOutput
         , docRenderPlain
         , docRenderColor
+        , docHeadingDepth
         , docSectionExtraction
         , docLangFromLocale
         , manualsPresent
@@ -1092,6 +1093,18 @@ docRenderPlain =
         assertBool "bold stripped" ("**bold**" `notTextIn` out)
         assertBool "code stripped" ("bold code link (https://x.example) here" `textIn` out)
         assertBool "fence indented" ("    burogu build" `textIn` out)
+
+docHeadingDepth :: TestTree
+docHeadingDepth =
+    testCase "headings of any depth render as headings" $ do
+        let plain = render Plain "## Section\n### Sub\n#### SubSub\n"
+            color = render Color "#### SubSub\n"
+        assertBool "h2 uppercased" ("SECTION" `textIn` plain)
+        assertBool "h3 kept" ("Sub" `textIn` plain)
+        assertBool "h4 kept" ("SubSub" `textIn` plain)
+        assertBool "no hash leaked" ("####" `notTextIn` plain)
+        assertBool "h4 bold, no underline" ("\ESC[1mSubSub\ESC[0m" `textIn` color)
+        assertBool "h4 not section-styled" ("\ESC[1m\ESC[4m" `notTextIn` color)
 
 docRenderColor :: TestTree
 docRenderColor =

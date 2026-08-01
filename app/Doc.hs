@@ -166,15 +166,22 @@ render style = T.unlines . go Normal . T.lines
     renderLine :: Text -> Text
     renderLine l
         | T.null l = ""
-        | "# " `T.isPrefixOf` l = renderHeading l
-        | "## " `T.isPrefixOf` l = renderHeading l
-        | "### " `T.isPrefixOf` l = renderHeading l
+        | isHeading l = renderHeading l
         | "- " `T.isPrefixOf` l = styleSegment "- " <> renderSegments (T.drop 2 l)
         | otherwise = renderSegments l
       where
         styleSegment t = case style of
             Color -> "\ESC[1m" <> t <> "\ESC[0m"
             Plain -> t
+
+    isHeading :: Text -> Bool
+    isHeading l = case T.uncons l of
+        Just ('#', rest) -> headingTail (T.dropWhile (== '#') rest)
+        _ -> False
+      where
+        headingTail rest = case T.uncons rest of
+            Just (' ', _) -> True
+            _ -> False
 
     renderHeading :: Text -> Text
     renderHeading l =
