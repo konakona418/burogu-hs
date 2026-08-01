@@ -30,6 +30,8 @@ data DeployConfig = DeployConfig
     { deployTarget :: Maybe Text
     , deployRepo :: Maybe Text
     , deployBranch :: Maybe Text
+    , deployCommitName :: Maybe Text
+    , deployCommitEmail :: Maybe Text
     }
 
 data Theme = Theme
@@ -57,6 +59,8 @@ data RawDeploy = RawDeploy
     { rawDeployTarget :: Maybe Text
     , rawDeployRepo :: Maybe Text
     , rawDeployBranch :: Maybe Text
+    , rawCommitName :: Maybe Text
+    , rawCommitEmail :: Maybe Text
     }
 
 data RawTheme = RawTheme
@@ -87,6 +91,8 @@ instance FromJSON RawDeploy where
             <$> object .:? "target"
             <*> object .:? "repo"
             <*> object .:? "branch"
+            <*> object .:? "commitName"
+            <*> object .:? "commitEmail"
 
 instance FromJSON RawTheme where
     parseJSON = withObject "theme" $ \object ->
@@ -132,8 +138,8 @@ loadConfig path = do
         pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
 
 resolveDeploy :: Maybe RawDeploy -> DeployConfig
-resolveDeploy Nothing = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing}
-resolveDeploy (Just raw) = DeployConfig{deployTarget = rawDeployTarget raw, deployRepo = rawDeployRepo raw, deployBranch = rawDeployBranch raw}
+resolveDeploy Nothing = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
+resolveDeploy (Just raw) = DeployConfig{deployTarget = rawDeployTarget raw, deployRepo = rawDeployRepo raw, deployBranch = rawDeployBranch raw, deployCommitName = rawCommitName raw, deployCommitEmail = rawCommitEmail raw}
 
 field :: Text -> Maybe Text -> Text -> IO Text
 field key Nothing fallback = do
@@ -204,7 +210,7 @@ defaults =
         , siteTagsLabel = "Tags"
         , siteCopyright = "© "
         , siteGeneratedBy = Nothing
-        , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing}
+        , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = defaultTheme
         }

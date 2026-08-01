@@ -36,9 +36,11 @@ deploySite = do
     case (deployTarget d, deployRepo d) of
         (Just _, Just _) -> die "both deploy.target and deploy.repo are set in config.yaml; pick one"
         (Just target, Nothing) -> rsyncDeploy target
-        (Nothing, Just repo) -> case deployBranch d of
-            Nothing -> die "deploy.repo is set but deploy.branch is missing in config.yaml; git deployment needs a branch (e.g. gh-pages)"
-            Just branch -> gitDeploy repo branch
+        (Nothing, Just repo) -> case (deployBranch d, deployCommitName d, deployCommitEmail d) of
+            (Nothing, _, _) -> die "deploy.repo is set but deploy.branch is missing in config.yaml; git deployment needs a branch (e.g. gh-pages)"
+            (Just _, Nothing, _) -> die "deploy.repo is set but deploy.commitName is missing in config.yaml; git deployment needs a commit identity"
+            (Just _, _, Nothing) -> die "deploy.repo is set but deploy.commitEmail is missing in config.yaml; git deployment needs a commit identity"
+            (Just branch, Just name, Just email) -> gitDeploy repo branch name email
         (Nothing, Nothing) -> do
             TIO.hPutStrLn stderr "error: no deploy configuration."
             TIO.hPutStrLn stderr "usage: set deploy.target (rsync) or deploy.repo + deploy.branch (git) in config.yaml"
@@ -62,8 +64,8 @@ rsyncDeploy target = do
     runBuild defaultPaths
     callProcess "rsync" ["-avz", "--delete", "site/", T.unpack target <> "/"]
 
-gitDeploy :: Text -> Text -> IO ()
-gitDeploy repo branch = do
+gitDeploy :: Text -> Text -> Text -> Text -> IO ()
+gitDeploy repo branch name email = do
     runBuild defaultPaths
     cache <- cacheDir
     createDirectoryIfMissing True cache
@@ -83,7 +85,7 @@ gitDeploy repo branch = do
         then TIO.putStrLn "nothing to deploy"
         else do
             message <- deployMessage
-            runGit cache ["-c", "user.name=burogu", "-c", "user.email=burogu@localhost", "commit", "-q", "-m", message]
+            runGit cache ["-c", "user.name=" <> T.unpack name, "-c", "user.email=" <> T.unpack email, "commit", "-q", "-m", message]
             runGit cache ["push", "--quiet", "origin", T.unpack branch]
             TIO.putStrLn ("deployed site to " <> repo <> " (" <> branch <> ")")
 
