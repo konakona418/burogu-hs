@@ -1,11 +1,14 @@
-module Page (CustomPage (..), loadPage) where
+module Page (CustomPage (..), loadPage, loadPages) where
 
 import Control.Exception (IOException, catch)
+import Data.List (sortOn)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Pandoc (docHasMath, readerOpts, writerOpts)
-import System.Directory (doesFileExist)
+import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import System.FilePath ((</>))
 import Text.Pandoc.Class (runIO)
 import Text.Pandoc.Definition (MetaValue (..), Pandoc (..), lookupMeta)
 import Text.Pandoc.Options (HTMLMathMethod)
@@ -43,6 +46,36 @@ loadPage math path = do
                                 Left err -> pure (Left (T.pack (show err)))
                                 Right body ->
                                     pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc}))
+
+{- | Load all custom pages from a directory of markdown files. Each file
+becomes a page keyed by its basename without the .md extension; slugs
+are sorted alphabetically. A missing directory yields an empty list;
+parse errors are aggregated.
+-}
+loadPages :: HTMLMathMethod -> FilePath -> IO (Either [Text] [(Text, CustomPage)])
+loadPages math dir = do
+    isDir <- doesDirectoryExist dir
+    if not isDir
+        then pure (Right [])
+        else do
+            names <- sortOn id . filter (T.isSuffixOf ".md" . T.pack) <$> listDirectory dir
+            results <- mapM (loadOne math dir) names
+            let errs = [name <> ": " <> err | Left (name, err) <- results]
+            if null errs
+                then pure (Right [(slug name, page) | Right (name, page) <- results])
+                else pure (Left errs)
+  where
+    loadOne :: HTMLMathMethod -> FilePath -> FilePath -> IO (Either (Text, Text) (Text, CustomPage))
+    loadOne math dir filename = do
+        result <- loadPage math (dir </> filename)
+        pure
+            ( case result of
+                Left err -> Left (T.pack filename, err)
+                Right (Just page) -> Right (slug (T.pack filename), page)
+                Right Nothing -> Left (T.pack filename, "unexpectedly missing")
+            )
+    slug :: Text -> Text
+    slug name = fromMaybe name (T.stripSuffix ".md" name)
 
 pageTitle :: Pandoc -> Maybe Text
 pageTitle (Pandoc meta _) =

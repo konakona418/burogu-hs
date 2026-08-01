@@ -19,8 +19,8 @@ data PageMeta = PageMeta
     , pmHasMath :: Bool
     }
 
-layout :: SiteConfig -> Maybe Text -> PageMeta -> L.Html () -> L.Html ()
-layout cfg mAbout meta body =
+layout :: SiteConfig -> [(Text, Text)] -> PageMeta -> L.Html () -> L.Html ()
+layout cfg navPages meta body =
     L.doctype_
         *> L.html_
             [L.lang_ (siteLang cfg)]
@@ -37,7 +37,7 @@ layout cfg mAbout meta body =
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
                         L.a_ [L.href_ "/"] (L.toHtml (siteName cfg))
-                        maybe (pure ()) renderAbout mAbout
+                        mapM_ renderNavPage navPages
                         L.a_ [L.href_ "/tags/"] (L.toHtml (siteTagsLabel cfg))
                     L.main_ body
                     L.footer_ [L.class_ "site-footer"] $ L.p_ (L.toHtml (siteCopyright cfg))
@@ -92,14 +92,14 @@ katexScript =
         , "}}});"
         ]
 
-renderAbout :: Text -> L.Html ()
-renderAbout label = L.a_ [L.href_ "/about/"] (L.toHtml label)
+renderNavPage :: (Text, Text) -> L.Html ()
+renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
 
-renderCustomPage :: SiteConfig -> Maybe Text -> PageMeta -> CustomPage -> L.Html ()
-renderCustomPage cfg mAbout meta page = layout cfg mAbout meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
+renderCustomPage :: SiteConfig -> [(Text, Text)] -> PageMeta -> CustomPage -> L.Html ()
+renderCustomPage cfg navPages meta page = layout cfg navPages meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
 
-render404 :: SiteConfig -> Maybe Text -> L.Html ()
-render404 cfg mAbout = layout cfg mAbout pageMeta $ L.div_ [L.class_ "not-found"] $ do
+render404 :: SiteConfig -> [(Text, Text)] -> L.Html ()
+render404 cfg navPages = layout cfg navPages pageMeta $ L.div_ [L.class_ "not-found"] $ do
     L.h1_ (L.toHtml ("404" :: Text))
     L.p_ (L.toHtml ("Page not found." :: Text))
     L.p_ $ L.a_ [L.href_ "/"] (L.toHtml ("Back to the home page" :: Text))
@@ -107,8 +107,8 @@ render404 cfg mAbout = layout cfg mAbout pageMeta $ L.div_ [L.class_ "not-found"
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = "404", pmOgType = "website", pmOgPath = "/404.html", pmOgDescription = Nothing, pmHasMath = False}
 
-renderIndex :: SiteConfig -> Maybe Text -> [Post] -> L.Html ()
-renderIndex cfg mAbout posts = layout cfg mAbout pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
+renderIndex :: SiteConfig -> [(Text, Text)] -> [Post] -> L.Html ()
+renderIndex cfg navPages posts = layout cfg navPages pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = siteName cfg, pmOgType = "website", pmOgPath = "/", pmOgDescription = Nothing, pmHasMath = False}
@@ -120,8 +120,8 @@ renderIndex cfg mAbout posts = layout cfg mAbout pageMeta $ L.ul_ [L.class_ "pos
             renderTags (postTags post)
             maybe (pure ()) renderDescription (postDescription post)
 
-renderPost :: SiteConfig -> Maybe Text -> Post -> L.Html ()
-renderPost cfg mAbout post = layout cfg mAbout pageMeta $ L.article_ $ do
+renderPost :: SiteConfig -> [(Text, Text)] -> Post -> L.Html ()
+renderPost cfg navPages post = layout cfg navPages pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml (postTitle post))
     L.p_ [L.class_ "post-meta"] $ do
         L.time_ (L.toHtml (postDate post))
@@ -131,8 +131,8 @@ renderPost cfg mAbout post = layout cfg mAbout pageMeta $ L.article_ $ do
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post, pmHasMath = postHasMath post}
 
-renderTagIndex :: SiteConfig -> Maybe Text -> [(Text, [Post])] -> L.Html ()
-renderTagIndex cfg mAbout groups = layout cfg mAbout pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
+renderTagIndex :: SiteConfig -> [(Text, Text)] -> [(Text, [Post])] -> L.Html ()
+renderTagIndex cfg navPages groups = layout cfg navPages pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = siteTagsLabel cfg, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
@@ -142,8 +142,8 @@ renderTagIndex cfg mAbout groups = layout cfg mAbout pageMeta $ L.ul_ [L.class_ 
             L.a_ [L.class_ "tag-name", L.href_ (tagUrl tag)] (L.toHtml tag)
             L.span_ [L.class_ "tag-count"] (L.toHtml ("(" <> T.pack (show (length posts)) <> ")"))
 
-renderTagArchive :: SiteConfig -> Maybe Text -> Text -> [Post] -> L.Html ()
-renderTagArchive cfg mAbout tag posts = layout cfg mAbout pageMeta $ L.article_ $ do
+renderTagArchive :: SiteConfig -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
+renderTagArchive cfg navPages tag posts = layout cfg navPages pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml tag)
     L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where

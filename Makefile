@@ -7,4 +7,4 @@ test:
 	cabal test
 
 format:
-	find . -name "*.hs" -not -path '*/dist-newstyle/*' | xargs fourmolu --mode inplace
+	find . -name "*.hs" -not -path '*/dist-newstyle/*' -not -path '*/packaging/*' | xargs fourmolu --mode inplace

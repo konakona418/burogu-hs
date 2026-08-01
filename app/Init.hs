@@ -1,10 +1,8 @@
 module Init (run) where
 
-import Data.ByteString qualified as BS
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import Data.Word (Word8)
 import System.Directory (
     createDirectoryIfMissing,
     doesDirectoryExist,
@@ -30,6 +28,32 @@ configTemplate =
         , "  math: mathjax          # none | mathjax | katex"
         , "  extraCss: [theme.css]"
         , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
+        ]
+
+aboutTemplate :: Text
+aboutTemplate =
+    T.unlines
+        [ "---"
+        , "title: About"
+        , "---"
+        , ""
+        , "# About"
+        , ""
+        , "Write something about yourself here. This page lives in `_pages/about.md`;"
+        , "the frontmatter `title` becomes both the nav link label and the page title."
+        , "Remove the file to drop the page (and its nav link) entirely."
+        ]
+
+notFoundTemplate :: Text
+notFoundTemplate =
+    T.unlines
+        [ "---"
+        , "title: 404"
+        , "---"
+        , ""
+        , "# Page not found"
+        , ""
+        , "The page you are looking for does not exist. [Back to the home page](/)."
         ]
 
 samplePost :: Text
@@ -69,10 +93,6 @@ samplePost =
         , "\\int_0^1 x^2 \\, dx = \\frac{1}{3}"
         , "$$"
         , ""
-        , "## Image"
-        , ""
-        , "![Sample image](/img/00/1.png)"
-        , ""
         , "## Table"
         , ""
         , "| Feature | Status |"
@@ -89,79 +109,6 @@ themeCss =
         , "   Enable them in config.yaml: theme.extraCss: [theme.css] */"
         ]
 
-pngBytes :: [Word8]
-pngBytes =
-    [ 0x89
-    , 0x50
-    , 0x4e
-    , 0x47
-    , 0x0d
-    , 0x0a
-    , 0x1a
-    , 0x0a
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x0d
-    , 0x49
-    , 0x48
-    , 0x44
-    , 0x52
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x08
-    , 0x02
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x90
-    , 0x77
-    , 0x53
-    , 0xde
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x0c
-    , 0x49
-    , 0x44
-    , 0x41
-    , 0x54
-    , 0x78
-    , 0x9c
-    , 0x63
-    , 0x60
-    , 0x60
-    , 0x60
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x04
-    , 0x00
-    , 0x01
-    , 0xf6
-    , 0x17
-    , 0x38
-    , 0x55
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x49
-    , 0x45
-    , 0x4e
-    , 0x44
-    , 0xae
-    , 0x42
-    , 0x60
-    , 0x82
-    ]
-
 run :: FilePath -> IO ()
 run target = do
     exists <- doesDirectoryExist target
@@ -177,15 +124,17 @@ run target = do
   where
     writeAll = do
         createDirectoryIfMissing True (target </> "_post")
-        createDirectoryIfMissing True (target </> "img" </> "00")
+        createDirectoryIfMissing True (target </> "_pages")
         TIO.writeFile (target </> "_post" </> "2026-07-31-hello-world.md") samplePost
-        BS.writeFile (target </> "img" </> "00" </> "1.png") (BS.pack pngBytes)
+        TIO.writeFile (target </> "_pages" </> "404.md") notFoundTemplate
+        TIO.writeFile (target </> "_pages" </> "about.md") aboutTemplate
         TIO.writeFile (target </> "CNAME") "example.com\n"
         TIO.writeFile (target </> "theme.css") themeCss
         writeConfig
         TIO.putStrLn ("initialized " <> T.pack target <> ":")
         TIO.putStrLn ("  " <> T.pack target <> "/_post/2026-07-31-hello-world.md")
-        TIO.putStrLn ("  " <> T.pack target <> "/img/00/1.png")
+        TIO.putStrLn ("  " <> T.pack target <> "/_pages/404.md")
+        TIO.putStrLn ("  " <> T.pack target <> "/_pages/about.md")
         TIO.putStrLn ("  " <> T.pack target <> "/CNAME")
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"

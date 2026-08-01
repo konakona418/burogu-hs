@@ -14,9 +14,10 @@ import Feed (feedUrl, renderAtom)
 import Html (groupByTag, render404, renderCustomPage, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
-import Page (CustomPage (..), loadPage)
+import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Sitemap (renderSitemap)
+import System.Directory (createDirectoryIfMissing)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
@@ -97,6 +98,10 @@ tests =
         , aboutNavShown
         , aboutNavHidden
         , copyrightCustom
+        , loadPagesFromDir
+        , loadPagesMissingDir
+        , loadPagesErrorAggregation
+        , navMultiplePages
         ]
 
 fullFrontmatter :: TestTree
@@ -313,7 +318,7 @@ mathjaxInlineMath =
             assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
             assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
             assertBool "post marked as having math" (postHasMath post)
-            let page = renderHtml (renderPost testConfig Nothing post)
+            let page = renderHtml (renderPost testConfig [] post)
             assertBool "script injected in page" ("<script" `textIn` page)
             assertBool "mathjax URL" ("mathjax" `textIn` page)
 
@@ -324,7 +329,7 @@ mathjaxNoMathNoScript =
         assertRight result $ \post -> do
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             assertBool "not marked as having math" (not (postHasMath post))
-            let page = renderHtml (renderPost testConfig Nothing post)
+            let page = renderHtml (renderPost testConfig [] post)
             assertBool "no script in page" ("<script" `notTextIn` page)
 
 plainMathNoScript :: TestTree
@@ -335,7 +340,7 @@ plainMathNoScript =
             assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
-            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig Nothing post))
+            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig [] post))
 
 mathMethodMapping :: TestTree
 mathMethodMapping =
@@ -349,15 +354,15 @@ tagsLabelCustomized :: TestTree
 tagsLabelCustomized =
     testCase "custom tagsLabel appears in the nav and tag index title" $ do
         let zhConfig = testConfig{siteTagsLabel = "标签"}
-            nav = renderHtml (renderIndex zhConfig Nothing [])
+            nav = renderHtml (renderIndex zhConfig [] [])
         assertBool "nav label" (">标签</a>" `textIn` nav)
-        let indexPage = renderHtml (renderTagIndex zhConfig Nothing [("essay", [postWithTags ["essay"]])])
+        let indexPage = renderHtml (renderTagIndex zhConfig [] [("essay", [postWithTags ["essay"]])])
         assertBool "index title" ("<title>标签</title>" `textIn` indexPage)
 
 tagArchiveTitleIsTagName :: TestTree
 tagArchiveTitleIsTagName =
     testCase "tag archive title is the bare tag name" $ do
-        let page = renderHtml (renderTagArchive testConfig Nothing "essay" [postWithTags ["essay"]])
+        let page = renderHtml (renderTagArchive testConfig [] "essay" [postWithTags ["essay"]])
         assertBool "title" ("<title>essay</title>" `textIn` page)
         assertBool "no prefix" ("Tag:" `notTextIn` page)
 
@@ -436,7 +441,7 @@ cssSafeArea =
 viewportFitCover :: TestTree
 viewportFitCover =
     testCase "viewport meta opts into full-screen safe areas" $ do
-        let page = renderHtml (renderIndex testConfig Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [])
         assertBool "viewport-fit=cover" ("viewport-fit=cover" `textIn` page)
 
 cssExtraCssAppended :: TestTree
@@ -448,7 +453,7 @@ cssExtraCssAppended =
 tagCountHook :: TestTree
 tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
-        let page = renderHtml (renderTagIndex testConfig Nothing [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
 
 cliDefaults :: TestTree
@@ -489,7 +494,7 @@ cliInvalidArg =
 sitemapUrls :: TestTree
 sitemapUrls =
     testCase "sitemap lists index, posts, tags and feed with absolute URLs" $ do
-        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]]
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] []
         assertBool "urlset" ("<urlset" `textIn` xml)
         assertBool "index" ("https://lizi.moe/" `textIn` xml)
         assertBool "post" ("https://lizi.moe/posts/test/" `textIn` xml)
@@ -500,7 +505,7 @@ sitemapUrls =
 sitemapLastmod :: TestTree
 sitemapLastmod =
     testCase "posts carry their date as lastmod" $ do
-        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]]
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] []
         assertBool "lastmod" ("<lastmod>2026-01-01</lastmod>" `textIn` xml)
 
 robotsContent :: TestTree
@@ -513,7 +518,7 @@ robotsContent =
 notFoundPage :: TestTree
 notFoundPage =
     testCase "404 page renders with a home link" $ do
-        let page = renderHtml (render404 testConfig Nothing)
+        let page = renderHtml (render404 testConfig [])
         assertBool "title" ("<title>404</title>" `textIn` page)
         assertBool "heading" ("<h1>404</h1>" `textIn` page)
         assertBool "home link" ("href=\"/\"" `textIn` page)
@@ -528,9 +533,9 @@ extraJsInjected :: TestTree
 extraJsInjected =
     testCase "extra JS files are injected as deferred scripts on every page" $ do
         let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
-        let page = renderHtml (renderIndex jsConfig Nothing [])
+        let page = renderHtml (renderIndex jsConfig [] [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
-        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig Nothing []))
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] []))
 
 serverParsePath :: TestTree
 serverParsePath =
@@ -591,20 +596,65 @@ customPageHasMath =
 aboutNavShown :: TestTree
 aboutNavShown =
     testCase "about link appears in the nav when present" $ do
-        let page = renderHtml (renderIndex testConfig (Just "About Me") [])
+        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] [])
         assertBool "nav link" ("href=\"/about/\">About Me" `textIn` page)
 
 aboutNavHidden :: TestTree
 aboutNavHidden =
     testCase "no about link without an about page" $ do
-        let page = renderHtml (renderIndex testConfig Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [])
         assertBool "no link" ("/about/" `notTextIn` page)
 
 copyrightCustom :: TestTree
 copyrightCustom =
     testCase "footer uses the configurable copyright" $ do
-        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [])
         assertBool "custom copyright" ("自定义版权" `textIn` page)
+
+loadPagesFromDir :: TestTree
+loadPagesFromDir =
+    testCase "loadPages reads all markdown pages with slugs in order" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/pages-a"
+        writeFile "/tmp/burogu-test/pages-a/about.md" "---\ntitle: About\n---\n# About\n"
+        writeFile "/tmp/burogu-test/pages-a/projects.md" "# Projects\n"
+        result <- loadPages plainMath "/tmp/burogu-test/pages-a"
+        case result of
+            Right pages -> do
+                assertEqual "slugs" ["about", "projects"] (map fst pages)
+                assertEqual "titles" [Just "About", Nothing] (map (cpTitle . snd) pages)
+            Left errs -> assertBool ("expected success, got: " <> show errs) False
+
+loadPagesMissingDir :: TestTree
+loadPagesMissingDir =
+    testCase "loadPages on a missing directory yields an empty list" $ do
+        result <- loadPages plainMath "/tmp/burogu-test/no-such-pages"
+        assertEqual "empty" (Right []) result
+
+loadPagesErrorAggregation :: TestTree
+loadPagesErrorAggregation =
+    testCase "loadPages aggregates parse errors with filenames" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/pages-bad"
+        writeFile "/tmp/burogu-test/pages-bad/ok.md" "# Fine\n"
+        BS.writeFile "/tmp/burogu-test/pages-bad/broken.md" (BS.pack [0xff, 0xfe])
+        result <- loadPages plainMath "/tmp/burogu-test/pages-bad"
+        case result of
+            Left errs -> assertBool "filename in error" (any ("broken.md" `T.isInfixOf`) errs)
+            Right _ -> assertBool "expected failure" False
+
+navMultiplePages :: TestTree
+navMultiplePages =
+    testCase "nav renders multiple pages in order" $ do
+        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] [])
+        assertBool "about link" ("href=\"/about/\">About" `textIn` page)
+        assertBool "projects link" ("href=\"/projects/\">Projects" `textIn` page)
+        let aboutPos = findSubstring "href=\"/about/\"" page
+            projectsPos = findSubstring "href=\"/projects/\"" page
+        assertBool "order" (aboutPos < projectsPos)
+
+findSubstring :: Text -> Text -> Int
+findSubstring needle haystack =
+    case T.breakOn needle haystack of
+        (before, _) -> T.length before
 
 escapedPost :: Post
 escapedPost =
@@ -613,7 +663,7 @@ escapedPost =
 ogMetaOnPost :: TestTree
 ogMetaOnPost =
     testCase "post pages carry article OG metadata" $ do
-        let html = renderHtml (renderPost testConfig Nothing (postWithTags ["essay"]))
+        let html = renderHtml (renderPost testConfig [] (postWithTags ["essay"]))
         assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
         assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
@@ -621,21 +671,21 @@ ogMetaOnPost =
 ogTypeWebsiteOnIndex :: TestTree
 ogTypeWebsiteOnIndex =
     testCase "index pages carry website OG metadata" $ do
-        let html = renderHtml (renderIndex testConfig Nothing [postWithTags ["essay"]])
+        let html = renderHtml (renderIndex testConfig [] [postWithTags ["essay"]])
         assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
 
 ogUrlAbsentWithoutBaseUrl :: TestTree
 ogUrlAbsentWithoutBaseUrl =
     testCase "og:url is omitted without baseUrl" $ do
-        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} Nothing [])
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] [])
         assertBool "no og:url" ("og:url" `notTextIn` html)
         assertBool "og:title still present" ("og:title" `textIn` html)
 
 ogDescriptionFallsBack :: TestTree
 ogDescriptionFallsBack =
     testCase "og:description falls back to siteDescription" $ do
-        let html = renderHtml (renderPost testConfig Nothing (postWithTags []))
+        let html = renderHtml (renderPost testConfig [] (postWithTags []))
         assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
 
 renderHtml :: L.Html () -> Text
