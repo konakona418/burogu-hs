@@ -8,6 +8,8 @@ author:          moe li
 homepage:        lizi.moe
 category:        Web
 build-type:      Simple
+data-files:      docs/manual.en.md
+                , docs/manual.zh.md
 
 executable burogu
     main-is:          Main.hs
@@ -15,6 +17,7 @@ executable burogu
                     , Cli
                     , Config
                     , Css
+                    , Doc
                     , Deploy
                     , Feed
                     , Html
@@ -60,6 +63,7 @@ test-suite burogu-test
                     , Cli
                     , Config
                     , Css
+                    , Doc
                     , Deploy
                     , Feed
                     , Html

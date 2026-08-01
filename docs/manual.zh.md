@@ -1,0 +1,359 @@
+<!--
+Authoring constraints for this manual (the doc renderer only understands
+this subset):
+- `#` document title, `##` section headings, `###` subsection headings.
+- Inline markup: `**bold**`, `code`, links [text](url).
+- Code blocks are fenced with ``` (optionally a language tag).
+- Lists use `- `. Wrap lines at 80 columns. Do not use tables.
+-->
+
+# burogu
+
+## NAME
+
+burogu - 静态博客生成器
+
+## SYNOPSIS
+
+**burogu** COMMAND [OPTION]...
+
+命令：
+
+`build`      从 src/ 构建 site/
+`clean`      删除输出目录
+`preview`    构建一次，然后在本地提供站点服务
+`watch`      源文件变化时重新构建，可选附带服务
+`init`       初始化 src/ 目录树
+`new-post`   从模板创建一篇新文章
+`deploy`     构建并部署站点（rsync 或 git）
+`sync`       将站点仓库与 git 远端同步
+`doc`        打印本手册
+
+运行 `burogu --help` 查看全部选项，运行 `burogu doc SECTION`（见
+下方 COMMANDS 节）查看手册的单个章节。
+
+## DESCRIPTION
+
+burogu 把纯文本的站点变成一个静态网站：从 `src/` 读取文章与页面，
+以共享布局渲染成 HTML，并把成品写到 `site/`，部署到任何地方（
+VPS、GitHub Pages、任意静态托管）。
+
+- 文章是有日期、可打标签的条目；页面是独立的文档，出现在导航里
+- 每个页面同时带浅色与暗色两套配色，访客的系统偏好决定用哪套
+- `preview` 与 `watch --serve` 内置本地 HTTP 服务器，方便即时迭代
+- 内置站内搜索页（见 SEARCH 节）；声明后自动生成年度归档、标签
+  索引与 404 页（见 SITE LAYOUT 节）
+- 内置主题由 `theme.preset` 选择：`aria`（默认，极简平面）与
+  `shaft`（编辑印刷感，单一红色锚点）。字体栈可按站覆盖或内嵌
+  （见 CONFIGURATION 节）
+
+## COMMANDS
+
+### build
+
+构建站点：渲染所有文章与页面、拷贝静态文件、写出输出目录。
+
+```
+burogu build [--config PATH] [--src DIR] [--out DIR]
+```
+
+`--config`  配置文件（默认：config.yaml）
+`--src`     源目录；文章位于 DIR/_post（默认：src）
+`--out`     输出目录（默认：site）
+
+每次构建都会从零重建输出目录。若任何页面或文章校验失败，构建
+会在触碰输出目录之前停止，旧的站点原样保留。
+
+示例：
+
+```
+burogu build --out /var/www/lizi.moe
+```
+
+### clean
+
+删除输出目录。
+
+```
+burogu clean [--out DIR]
+```
+
+### preview
+
+构建一次，然后用内置 HTTP 服务器提供站点。
+
+```
+burogu preview [--port PORT]
+```
+
+`--port`  监听端口（默认：8000）
+
+服务器只监听 127.0.0.1，以正确的 Content-Type 提供生成的页面；
+缺失的页面回退到 `404.html`（站点没有 404 页时返回纯文本）。用
+浏览器打开 http://127.0.0.1:8000/ 查看效果。Ctrl-C 停止。
+
+### watch
+
+`src/` 或 `config.yaml` 一旦变化就重新构建，直到被中断。
+
+```
+burogu watch [--serve PORT]
+```
+
+`--serve`  同时在指定端口提供站点
+
+源目录被轮询检测；任何变化都会触发重建（失败的构建保留旧输出）。
+配合 `--serve`，改动无需重启服务器即可生效。
+
+### init
+
+创建带示例文章、起步主题和 `config.yaml` 模板的 `src/` 目录树
+（模板里每个配置项都带注释）。
+
+```
+burogu init [DIR]
+```
+
+`DIR`  目标目录（默认：src）
+
+### new-post
+
+从模板创建一篇新文章。
+
+```
+burogu new-post SLUG [--draft]
+```
+
+`SLUG`    文章 slug，用于文件名与 URL；不允许 / ? # % 与空格
+`--draft` 创建草稿（无日期、不发布）
+
+正式文章命名为 `YYYY-MM-DD-SLUG.md`（今天的日期），并写入
+`date:` frontmatter；草稿命名为 `SLUG.md`、`draft: true`，无需日期。
+
+### deploy
+
+构建站点，然后按 `config.yaml` 的 `deploy` 节发布（见
+DEPLOYMENT 节）。
+
+```
+burogu deploy [--clear-cache]
+```
+
+`--clear-cache`  清空持久 git 缓存（仅 git 模式；下次部署会从零
+                 重新抓取）
+
+### sync
+
+把站点仓库（存放 `config.yaml` 与 `src/` 的目录）与 git 远端同步
+（见 SYNC 节）。
+
+```
+burogu sync ACTION [REPO]
+```
+
+`ACTION`  push 或 pull
+`REPO`    git 仓库地址（默认：config.yaml 的 `srcRepo`）
+
+### doc
+
+打印本手册。
+
+```
+burogu doc [SECTION] [--lang LANG] [--color MODE]
+```
+
+`SECTION`  章节名（如 `config`、`commands`）；默认：全文
+`--lang`   `en` 或 `zh`；默认：跟随系统 locale（zh* 语言环境得到
+           中文，其余得到英文）
+`--color`  `auto`、`always` 或 `never`；默认：auto（输出到终端时
+           用 ANSI 样式，被管道/重定向时输出纯文本）
+
+## CONFIGURATION
+
+`config.yaml` 与 `src/` 同级（`init` 模板解释了每个键）。所有键
+均可选；缺省值会在启动时以警告形式打印。未知键会被忽略。
+
+### site
+
+`siteName`         站点标题；用于页头、HTML 标题与 og:site_name
+                   （默认：burogu）
+`siteAuthor`       作者名；作为默认版权署名（默认：空）
+`siteDescription`  站点描述；用于 HTML description meta 标签
+`siteLang`         页面语言代码，如 `en` 或 `zh-CN`（默认：zh-CN）
+`baseUrl`          站点地址，如 `https://lizi.moe`，必须以
+                   http:// 或 https:// 开头。设置后生成 feed 与
+                   og:url meta 标签
+`siteCopyright`    页脚版权文本（默认：© + siteAuthor）
+`siteGeneratedBy`  页脚版权旁的署名行，如 "Generated with Burogu"；
+                   未设置时不输出
+
+### deploy
+
+`target`         rsync 目标（user@host:/path）。设置后 `deploy`
+                 用 rsync 发布（--delete）
+`repo`           git 仓库地址。设置后 `deploy` 把站点提交到 git
+                 分支（GitHub Pages 等）；与 `target` 互斥
+`branch`         要发布到的分支（git 模式；与 repo 搭配必填）
+`commitName`     提交身份：名字（git 模式；必填）
+`commitEmail`    提交身份：邮箱（git 模式；必填）
+
+### theme
+
+`preset`     内置主题：`aria` 或 `shaft`（默认：aria）
+`math`       数学渲染：`none`、`mathjax` 或 `katex`
+             （默认：mathjax）
+`mathUrl`    数学脚本的 CDN 地址；缺省为所选方式的 pandoc 默认值
+`extraCss`   `src/` 下的文件列表，追加到生成的样式表末尾（可覆盖
+             生成规则）
+`extraJs`    `src/` 下的文件列表，作为延迟脚本注入每个页面
+             （文件缺失会中止构建）
+
+#### fonts
+
+覆盖预设的排版；每个键均可选，缺省回退到预设默认值：
+
+`body`         正文字体栈（名称列表）
+`display`      标题/日期/年份的展示字体栈（名称列表；shaft 默认
+               用衬线栈）
+`code`         代码字体栈（名称列表；默认：浏览器等宽字体）
+`size`         基础字号，如 `17px`
+`lineHeight`   基础行高，如 `28px`
+`files`        内嵌字体文件（见下）
+
+含空格的字体名会自动加引号；通用关键字 `serif`、
+`sans-serif`、`monospace` 与 `system-ui`/`ui-*` 系列原样输出。
+
+`files` 条目（每个：`src`、`family`，可选 `weight`、`style`）把
+`src/` 下的字体文件拷到 `site/fonts/` 并生成 @font-face 规则；在
+字体栈里用 family 名引用即可：
+
+```
+theme:
+  preset: shaft
+  fonts:
+    display: [Georgia, "Noto Serif CJK SC", "Songti SC", SimSun, serif]
+    files:
+      - src: fonts/my-serif.woff2
+        family: My Serif
+        weight: 400
+        style: normal
+```
+
+字体文件缺失是构建错误（保留旧输出）。
+
+### srcRepo
+
+`srcRepo`  `sync` 的默认 git 仓库地址（见 SYNC 节）
+
+## SITE LAYOUT
+
+```
+config.yaml          站点配置
+src/
+  _post/             文章（YYYY-MM-DD-slug.md）
+  _pages/            页面（slug.md）
+  其余所有文件       原样拷贝到站点
+site/                构建输出（每次构建重新生成）
+```
+
+### Posts 文章
+
+文章位于 `src/_post/*.md`，带 YAML frontmatter：
+
+`title`        文章标题（默认：slug）
+`date`         发布日期，`YYYY-MM-DD`（默认：取文件名前缀
+               `YYYY-MM-DD-`）
+`tags`         标签列表，如 `[essay, review]`
+`description`  摘要（用于首页列表、feed 与 og:description）
+`draft`        `true` 隐藏文章，并允许缺省日期
+
+文章 URL 为 `/posts/slug/`。标签链接到标签归档；相同标签必须使用
+相同拼写（仅大小写不同的标签会打印警告）。数学渲染（
+`theme.math`）按文章自动检测。
+
+### Pages 页面
+
+页面位于 `src/_pages/*.md`；每个成为 `/slug/`，并出现在导航中：
+
+`title`       导航标签与页面标题
+`priority`    导航位置，小的在前（默认：100）
+`redirectAs`  把本页声明为内置特殊页之一：`/tags/`、`/archive/`、
+              `/search/`、`/404.html`
+
+页面声明特殊页后，burogu 生成对应页面（见下）而非 markdown
+正文，本页的 slug URL 会重定向到它。`redirectAs` 指向其他地址是
+构建错误。
+
+- `/tags/` - 标签索引（每个标签带归档链接）
+- `/archive/` - 全部文章按年份分组
+- `/search/` - 客户端搜索页（见 SEARCH 节）
+- `/404.html` - 预览服务器（以及静态托管）对缺失页面提供的内容；
+  **它的正文就是你的 markdown**
+
+### 静态文件与内置产物
+
+`src/` 下其余所有文件（图片、CNAME、favicon、字体……）原样拷贝
+到站点。生成器自身会写 `style.css`、`robots.txt`、`sitemap.xml`、
+feed `feed.xml`（仅在设置 baseUrl 时）与 `search.json`（仅在声明
+搜索页时）。与内置产物同名的文件（如 `src/style.css`）会覆盖它。
+
+## SEARCH
+
+声明 `redirectAs: /search/` 的页面即可启用全站客户端搜索。搜索
+页是一个文本输入框加一个结果列表；输入时以大小写不敏感的子串
+匹配过滤全站（文章与页面），命中处高亮。`search.json`（声明搜索
+页时生成）携带索引：全文、标题、URL，文章还含日期与标签。
+
+默认行为可以整体替换：在 `theme.extraJs` 文件里定义全局函数
+`window.buroguSearch`，内置脚本会把控制权交给它（它收到
+`{ url: "/search.json" }`）。样式可用 `theme.extraCss` 定制。
+
+## DEPLOYMENT
+
+`burogu deploy` 构建站点并发布。两种模式在 `config.yaml` 的
+`deploy` 节配置：
+
+### rsync
+
+设置 `deploy.target` 后，站点以 `rsync --delete` 镜像到目标：
+`user@host:/var/www/lizi.moe`。适合 VPS 部署。
+
+### git
+
+设置 `deploy.repo` 与 `deploy.branch` 后，站点提交到 git 分支
+（GitHub Pages、Gitee Pages……）。`deploy.commitName` 与
+`deploy.commitEmail` 标识提交身份，必填。
+
+分支被抓取到持久缓存目录（`~/.cache/burogu-deploy`，遵循
+XDG_CACHE_HOME），新构建以带时间戳的提交信息提交其上，再以
+快进方式推送（绝不强制）。`--clear-cache` 从空缓存重新开始。
+
+## SYNC
+
+`sync` 把存放 `config.yaml` 与 `src/` 的目录视为独立的 git 仓库
+（`site/` 输出被忽略）：
+
+- `burogu sync push` 把全部改动（`config.yaml`、`src/`）提交到本地
+  仓库并推送到远端
+- `burogu sync pull` 把本地仓库重置到远端分支（远端为准；本地改动
+  被丢弃）
+
+远端默认取 `config.yaml` 的 `srcRepo`，可用 `REPO` 参数覆盖。
+`push` 在无改动可推时会提示。
+
+## FILES
+
+`config.yaml`       站点配置（与 src/ 同级）
+`src/`              文章、页面与静态文件
+`site/`             构建输出（每次重建；可安全删除）
+`~/.cache/burogu-deploy/`  git 部署的持久缓存
+
+## EXIT STATUS
+
+成功返回 0。任何错误返回非零，包括无效的配置或 frontmatter、
+未知的主题预设、缺失的附加文件、失败的部署。
+
+## SEE ALSO
+
+`burogu --help`、README、以及 `burogu init` 生成的 `config.yaml`
+模板中的注释。

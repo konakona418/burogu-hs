@@ -23,6 +23,7 @@ data Command
     | NewPost {nSlug :: Text, nDraft :: Bool}
     | Deploy {dClearCache :: Bool}
     | Sync {sAction :: Text, sRepo :: Maybe Text}
+    | Doc {dSection :: Maybe Text, dLang :: Maybe Text, dColor :: Maybe Text}
 
 parseCommand :: IO Command
 parseCommand = execParser cliInfo
@@ -46,6 +47,7 @@ commands =
         <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
         <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
+        <> command "doc" (info (Doc <$> sectionParser <*> langParser <*> colorParser) (progDesc "Print the man-style manual (en/zh, sections, ANSI styling)"))
 
 pathsParser :: Parser Paths
 pathsParser =
@@ -130,6 +132,35 @@ repoParser =
         ( strArgument
             ( metavar "REPO"
                 <> help "git repo URL (defaults to srcRepo in config.yaml)"
+            )
+        )
+
+sectionParser :: Parser (Maybe Text)
+sectionParser =
+    optional
+        ( strArgument
+            ( metavar "SECTION"
+                <> help "Manual section to print (default: the whole manual)"
+            )
+        )
+
+langParser :: Parser (Maybe Text)
+langParser =
+    optional
+        ( strOption
+            ( long "lang"
+                <> metavar "LANG"
+                <> help "Manual language: en or zh (default: follow the locale)"
+            )
+        )
+
+colorParser :: Parser (Maybe Text)
+colorParser =
+    optional
+        ( strOption
+            ( long "color"
+                <> metavar "MODE"
+                <> help "ANSI styling: auto, always or never (default: auto)"
             )
         )
 

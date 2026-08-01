@@ -14,11 +14,13 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Yaml (ParseException, decodeEither')
+import Doc (OutputStyle (..), extractSection, langFromLocale, render, sections)
 import Feed (feedUrl, renderAtom)
 import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
+import Paths_burogu (getDataFileName)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
 import Registry (SitePages (..), classifyPages, navItems)
 import Search (renderSearch, renderSearchIndex)
@@ -145,6 +147,11 @@ tests =
         , searchPageScript
         , buildKeepsOutputOnPageError
         , fontFileMissingKeepsOldOutput
+        , docRenderPlain
+        , docRenderColor
+        , docSectionExtraction
+        , docLangFromLocale
+        , manualsPresent
         ]
 
 fullFrontmatter :: TestTree
@@ -1075,6 +1082,59 @@ fontFileMissingKeepsOldOutput =
             Right _ -> assertBool "expected failure" False
         marker <- doesFileExist "/tmp/burogu-test/font-out/marker.txt"
         assertBool "old output kept" marker
+
+docRenderPlain :: TestTree
+docRenderPlain =
+    testCase "plain rendering strips all markup" $ do
+        let out = render Plain "## Commands\n\n- **bold** `code` [link](https://x.example) here\n\n```sh\nburogu build\n```\n"
+        assertBool "no escape codes" ("\ESC" `notTextIn` out)
+        assertBool "section uppercased" ("COMMANDS" `textIn` out)
+        assertBool "bold stripped" ("**bold**" `notTextIn` out)
+        assertBool "code stripped" ("bold code link (https://x.example) here" `textIn` out)
+        assertBool "fence indented" ("    burogu build" `textIn` out)
+
+docRenderColor :: TestTree
+docRenderColor =
+    testCase "color rendering embeds ANSI styles" $ do
+        let out = render Color "## Commands\n\n- **bold** `code` [link](https://x.example) here\n\n```sh\nburogu build\n```\n"
+        assertBool "heading style" ("\ESC[1m\ESC[4mCommands\ESC[0m" `textIn` out)
+        assertBool "bold style" ("\ESC[1mbold\ESC[0m" `textIn` out)
+        assertBool "code style" ("\ESC[36mcode\ESC[0m" `textIn` out)
+        assertBool "fence dimmed" ("\ESC[2mburogu build\ESC[0m" `textIn` out)
+
+docSectionExtraction :: TestTree
+docSectionExtraction =
+    testCase "sections are extracted by exact and unique-prefix name" $ do
+        let manual = T.unlines ["## Configuration", "key: value", "## Commands", "run it", "## Deployment", "deploy it"]
+        assertEqual "exact" (Right "## Configuration\nkey: value\n") (extractSection "configuration" manual)
+        assertEqual "unique prefix" (Right "## Commands\nrun it\n") (extractSection "com" manual)
+        assertBool "unknown" (isLeft (extractSection "nope" manual))
+        assertBool "ambiguous" (isLeft (extractSection "c" manual))
+        assertEqual "section list" ["configuration", "commands", "deployment"] (map fst (sections manual))
+
+docLangFromLocale :: TestTree
+docLangFromLocale =
+    testCase "locale values map to languages" $ do
+        assertEqual "zh locale" "zh" (langFromLocale ["zh_CN.UTF-8"])
+        assertEqual "zh case-insensitive" "zh" (langFromLocale ["ZH_TW"])
+        assertEqual "en locale" "en" (langFromLocale ["en_US.UTF-8"])
+        assertEqual "C locale" "en" (langFromLocale ["C"])
+        assertEqual "no locale" "en" (langFromLocale [])
+
+manualsPresent :: TestTree
+manualsPresent =
+    testCase "both manuals ship and cover every section" $ do
+        mapM_ check ["en", "zh"]
+  where
+    required = ["name", "synopsis", "description", "commands", "configuration", "site layout", "search", "deployment", "sync", "files", "exit status", "see also"]
+    check :: Text -> IO ()
+    check lang = do
+        path <- getDataFileName ("docs/manual." <> T.unpack lang <> ".md")
+        exists <- doesFileExist path
+        assertBool (T.unpack lang <> " manual present") exists
+        content <- TIO.readFile path
+        let names = map fst (sections content)
+        assertBool (T.unpack lang <> " manual complete") (all (`elem` names) required)
 
 escapedPost :: Post
 escapedPost =
