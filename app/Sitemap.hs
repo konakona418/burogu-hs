@@ -13,15 +13,18 @@ sitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
 xmlDeclaration :: Text
 xmlDeclaration = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 
-renderSitemap :: Text -> [Post] -> [(Text, Text)] -> Text
-renderSitemap baseUrl posts navItems =
+renderSitemap :: Text -> [Post] -> [(Text, Text)] -> Bool -> Text
+renderSitemap baseUrl posts navItems includeTags =
     TL.toStrict (L.renderText (L.toHtmlRaw xmlDeclaration *> sitemapXml))
   where
     sitemapXml = urlset [LB.makeAttribute "xmlns" sitemapNamespace] $ do
         urlEntry siteUrl Nothing
         mapM_ (\p -> urlEntry (baseUrl <> postUrl p) (Just (postDate p))) posts
-        urlEntry (baseUrl <> "/tags/") Nothing
-        mapM_ (\t -> urlEntry (baseUrl <> tagUrl t) Nothing) (map fst (groupByTag posts))
+        if includeTags
+            then do
+                urlEntry (baseUrl <> "/tags/") Nothing
+                mapM_ (\t -> urlEntry (baseUrl <> tagUrl t) Nothing) (map fst (groupByTag posts))
+            else pure ()
         mapM_ (\(_, href) -> urlEntry (baseUrl <> href) Nothing) navItems
         urlEntry (baseUrl <> "/feed.xml") Nothing
     siteUrl = baseUrl <> "/"

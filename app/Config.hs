@@ -18,7 +18,6 @@ data SiteConfig = SiteConfig
     , siteDescription :: Text
     , siteLang :: Text
     , siteBaseUrl :: Maybe Text
-    , siteTagsLabel :: Text
     , siteCopyright :: Text
     , siteGeneratedBy :: Maybe Text
     , siteDeploy :: DeployConfig
@@ -114,7 +113,6 @@ loadConfig path = do
                 warn ("  siteDescription = " <> siteDescription defaults)
                 warn ("  siteLang        = " <> siteLang defaults)
                 warn "  baseUrl         = (not set)"
-                warn ("  tagsLabel       = " <> siteTagsLabel defaults)
                 warn ("    math          = " <> themeMath (siteTheme defaults))
                 warn "    mathUrl       = (not set)"
                 warn "    extraCss      = (none)"
@@ -132,10 +130,15 @@ loadConfig path = do
         description <- field "siteDescription" (rawDescription raw) (siteDescription defaults)
         lang <- field "siteLang" (rawLang raw) (siteLang defaults)
         baseUrl <- resolveBaseUrl (rawBaseUrl raw)
-        tagsLabel <- field "tagsLabel" (rawTagsLabel raw) (siteTagsLabel defaults)
+        rejectTagsLabel (rawTagsLabel raw)
         copyright <- field "siteCopyright" (rawCopyright raw) ("© " <> author)
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+
+rejectTagsLabel :: Maybe Text -> IO ()
+rejectTagsLabel Nothing = pure ()
+rejectTagsLabel (Just _) =
+    die "tagsLabel is no longer supported; declare the tags page in _pages/ (e.g. _pages/tags.md with `title: Tags` and `redirectAs: /tags/`), then remove tagsLabel from config.yaml"
 
 resolveDeploy :: Maybe RawDeploy -> DeployConfig
 resolveDeploy Nothing = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
@@ -207,7 +210,6 @@ defaults =
         , siteDescription = ""
         , siteLang = "zh-CN"
         , siteBaseUrl = Nothing
-        , siteTagsLabel = "Tags"
         , siteCopyright = "© "
         , siteGeneratedBy = Nothing
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}

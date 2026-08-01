@@ -1,4 +1,4 @@
-module Page (CustomPage (..), loadPage, loadPages) where
+module Page (CustomPage (..), defaultPagePriority, loadPage, loadPages) where
 
 import Control.Exception (IOException, catch)
 import Data.List (sortOn)
@@ -15,11 +15,17 @@ import Text.Pandoc.Options (HTMLMathMethod)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
 import Text.Pandoc.Writers.HTML (writeHtml5String)
+import Text.Read (readMaybe)
+
+defaultPagePriority :: Int
+defaultPagePriority = 100
 
 data CustomPage = CustomPage
     { cpTitle :: Maybe Text
     , cpBodyHtml :: Text
     , cpHasMath :: Bool
+    , cpPriority :: Int
+    , cpRedirectAs :: Maybe Text
     }
     deriving (Eq, Show)
 
@@ -44,8 +50,10 @@ loadPage math path = do
                             ebody <- runIO (writeHtml5String (writerOpts math) doc)
                             case ebody of
                                 Left err -> pure (Left (T.pack (show err)))
-                                Right body ->
-                                    pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc}))
+                                Right body -> case pagePriority doc of
+                                    Left err -> pure (Left err)
+                                    Right priority ->
+                                        pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc}))
 
 {- | Load all custom pages from a directory of markdown files. Each file
 becomes a page keyed by its basename without the .md extension; slugs
@@ -66,8 +74,8 @@ loadPages math dir = do
                 else pure (Left errs)
   where
     loadOne :: HTMLMathMethod -> FilePath -> FilePath -> IO (Either (Text, Text) (Text, CustomPage))
-    loadOne math dir filename = do
-        result <- loadPage math (dir </> filename)
+    loadOne method base filename = do
+        result <- loadPage method (base </> filename)
         pure
             ( case result of
                 Left err -> Left (T.pack filename, err)
@@ -82,6 +90,25 @@ pageTitle (Pandoc meta _) =
     case lookupMeta "title" meta of
         Just value -> metaText value
         Nothing -> Nothing
+
+pageRedirectAs :: Pandoc -> Maybe Text
+pageRedirectAs (Pandoc meta _) =
+    case lookupMeta "redirectAs" meta of
+        Just value -> metaText value
+        Nothing -> Nothing
+
+pagePriority :: Pandoc -> Either Text Int
+pagePriority (Pandoc meta _) =
+    case lookupMeta "priority" meta of
+        Nothing -> Right defaultPagePriority
+        Just value -> case metaInt value of
+            Just n -> Right n
+            Nothing -> Left "invalid priority in frontmatter: expected an integer"
+
+metaInt :: MetaValue -> Maybe Int
+metaInt (MetaString t) = readMaybe (T.unpack t)
+metaInt (MetaInlines inlines) = readMaybe (T.unpack (stringify inlines))
+metaInt _ = Nothing
 
 metaText :: MetaValue -> Maybe Text
 metaText (MetaString t) = Just t

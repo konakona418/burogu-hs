@@ -1,23 +1,27 @@
 module Main where
 
 import Cli (Command (..), Paths (..), cliInfo)
-import Config (DeployConfig (..), SiteConfig (..), Theme (..))
+import Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig)
+import Control.Exception (try)
 import Css (TokenColor (..), renderCss, tokenColors)
 import Data.ByteString qualified as BS
 import Data.Either (isLeft)
 import Data.List (sort)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, render404, renderCustomPage, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl)
+import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
+import Site (SitePages (..), classifyPages, navItems)
 import Sitemap (renderSitemap)
 import System.Directory (createDirectoryIfMissing)
+import System.Exit (ExitCode)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
@@ -104,6 +108,21 @@ tests =
         , loadPagesMissingDir
         , loadPagesErrorAggregation
         , navMultiplePages
+        , pagePriorityParsed
+        , pagePriorityDefault
+        , pagePriorityInvalid
+        , pageRedirectAsParsed
+        , classifySpecialPages
+        , classifyUnknownRedirectAs
+        , classifyDuplicateSpecial
+        , classifyCollision
+        , navPriorityOrder
+        , navPriorityTieLexicographic
+        , navDefaultPriorityLast
+        , navTagsPosition
+        , archiveYearGroups
+        , redirectPageMetaRefresh
+        , tagsLabelRejected
         ]
 
 fullFrontmatter :: TestTree
@@ -354,12 +373,9 @@ mathMethodMapping =
 
 tagsLabelCustomized :: TestTree
 tagsLabelCustomized =
-    testCase "custom tagsLabel appears in the nav and tag index title" $ do
-        let zhConfig = testConfig{siteTagsLabel = "标签"}
-            nav = renderHtml (renderIndex zhConfig [] [])
-        assertBool "nav label" (">标签</a>" `textIn` nav)
-        let indexPage = renderHtml (renderTagIndex zhConfig [] [("essay", [postWithTags ["essay"]])])
-        assertBool "index title" ("<title>标签</title>" `textIn` indexPage)
+    testCase "tag index title comes from the tags page title" $ do
+        let page = renderHtml (renderTagIndex testConfig [] "标签" [("essay", [postWithTags ["essay"]])])
+        assertBool "index title" ("<title>标签</title>" `textIn` page)
 
 tagArchiveTitleIsTagName :: TestTree
 tagArchiveTitleIsTagName =
@@ -455,7 +471,7 @@ cssExtraCssAppended =
 tagCountHook :: TestTree
 tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
-        let page = renderHtml (renderTagIndex testConfig [] [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] "Tags" [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
 
 cliDefaults :: TestTree
@@ -496,7 +512,7 @@ cliInvalidArg =
 sitemapUrls :: TestTree
 sitemapUrls =
     testCase "sitemap lists index, posts, tags and feed with absolute URLs" $ do
-        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] []
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] [] True
         assertBool "urlset" ("<urlset" `textIn` xml)
         assertBool "index" ("https://lizi.moe/" `textIn` xml)
         assertBool "post" ("https://lizi.moe/posts/test/" `textIn` xml)
@@ -507,7 +523,7 @@ sitemapUrls =
 sitemapLastmod :: TestTree
 sitemapLastmod =
     testCase "posts carry their date as lastmod" $ do
-        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] []
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] [] True
         assertBool "lastmod" ("<lastmod>2026-01-01</lastmod>" `textIn` xml)
 
 robotsContent :: TestTree
@@ -670,6 +686,168 @@ findSubstring needle haystack =
     case T.breakOn needle haystack of
         (before, _) -> T.length before
 
+pagePriorityParsed :: TestTree
+pagePriorityParsed =
+    testCase "pages read the frontmatter priority" $ do
+        writeFile "/tmp/burogu-test/priority.md" "---\npriority: 3\n---\n# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/priority.md"
+        case result of
+            Right (Just page) -> assertEqual "priority" 3 (cpPriority page)
+            _ -> assertBool "expected a page" False
+
+pagePriorityDefault :: TestTree
+pagePriorityDefault =
+    testCase "pages without priority default to 100" $ do
+        writeFile "/tmp/burogu-test/no-priority.md" "# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/no-priority.md"
+        case result of
+            Right (Just page) -> assertEqual "priority" 100 (cpPriority page)
+            _ -> assertBool "expected a page" False
+
+pagePriorityInvalid :: TestTree
+pagePriorityInvalid =
+    testCase "a non-integer priority is a hard error" $ do
+        writeFile "/tmp/burogu-test/bad-priority.md" "---\npriority: abc\n---\n# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/bad-priority.md"
+        assertBool "error" (isLeft result)
+
+pageRedirectAsParsed :: TestTree
+pageRedirectAsParsed =
+    testCase "pages read the frontmatter redirectAs" $ do
+        writeFile "/tmp/burogu-test/redir.md" "---\nredirectAs: /tags/\n---\n# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/redir.md"
+        case result of
+            Right (Just page) -> assertEqual "redirectAs" (Just "/tags/") (cpRedirectAs page)
+            _ -> assertBool "expected a page" False
+
+mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
+mkPage title priority redirect = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect}
+
+classifySpecialPages :: TestTree
+classifySpecialPages =
+    testCase "redirectAs declarations are classified as special pages" $ do
+        let pages =
+                [ ("tags", mkPage (Just "标签") 10 (Just "/tags/"))
+                , ("archive", mkPage Nothing 20 (Just "/archive/"))
+                , ("404", mkPage (Just "Oops") 0 (Just "/404.html"))
+                , ("about", mkPage (Just "About") 30 Nothing)
+                ]
+        case classifyPages pages of
+            Right sp -> do
+                assertBool "tags" (isJust (spTags sp))
+                assertBool "archive" (isJust (spArchive sp))
+                assertBool "404" (isJust (sp404 sp))
+                assertEqual "normal" ["about"] (map fst (spNormal sp))
+            Left errs -> assertBool ("expected success, got: " <> show errs) False
+
+classifyUnknownRedirectAs :: TestTree
+classifyUnknownRedirectAs =
+    testCase "an unregistered redirectAs is a hard error" $ do
+        let pages = [("misc", mkPage Nothing 0 (Just "/bogus/"))]
+        case classifyPages pages of
+            Left errs -> assertBool "message" (any ("unknown redirectAs '/bogus/'" `T.isInfixOf`) errs)
+            Right _ -> assertBool "expected failure" False
+
+classifyDuplicateSpecial :: TestTree
+classifyDuplicateSpecial =
+    testCase "duplicate special-page declarations are a hard error" $ do
+        let pages =
+                [ ("tags", mkPage Nothing 0 (Just "/tags/"))
+                , ("tag-collection", mkPage Nothing 0 (Just "/tags/"))
+                ]
+        case classifyPages pages of
+            Left errs -> assertBool "message" (any ("duplicate declaration of '/tags/'" `T.isInfixOf`) errs)
+            Right _ -> assertBool "expected failure" False
+
+classifyCollision :: TestTree
+classifyCollision =
+    testCase "a normal page colliding with a special URL is a hard error" $ do
+        let pages =
+                [ ("tags", mkPage Nothing 0 Nothing)
+                , ("tag-index", mkPage Nothing 0 (Just "/tags/"))
+                ]
+        case classifyPages pages of
+            Left errs -> assertBool "message" (any ("collides with the declared special URL '/tags/'" `T.isInfixOf`) errs)
+            Right _ -> assertBool "expected failure" False
+
+navPriorityOrder :: TestTree
+navPriorityOrder =
+    testCase "nav orders pages by priority, then slug" $ do
+        let pages =
+                [ ("zebra", mkPage Nothing 50 Nothing)
+                , ("apple", mkPage Nothing 10 Nothing)
+                , ("mango", mkPage Nothing 10 Nothing)
+                ]
+        case classifyPages pages of
+            Right sp -> do
+                let nav = navItems sp
+                assertEqual "order" ["/apple/", "/mango/", "/zebra/"] (map snd nav)
+            Left _ -> assertBool "expected success" False
+
+navPriorityTieLexicographic :: TestTree
+navPriorityTieLexicographic =
+    testCase "equal priorities break ties lexicographically" $ do
+        let pages = [("b", mkPage Nothing 0 Nothing), ("a", mkPage Nothing 0 Nothing)]
+        case classifyPages pages of
+            Right sp -> assertEqual "order" ["/a/", "/b/"] (map snd (navItems sp))
+            Left _ -> assertBool "expected success" False
+
+navDefaultPriorityLast :: TestTree
+navDefaultPriorityLast =
+    testCase "pages without priority come after pinned ones" $ do
+        let pages = [("free", mkPage Nothing 100 Nothing), ("pinned", mkPage Nothing 5 Nothing)]
+        case classifyPages pages of
+            Right sp -> assertEqual "order" ["/pinned/", "/free/"] (map snd (navItems sp))
+            Left _ -> assertBool "expected success" False
+
+navTagsPosition :: TestTree
+navTagsPosition =
+    testCase "tags and archive join the nav at their priority" $ do
+        let pages =
+                [ ("about", mkPage (Just "About") 30 Nothing)
+                , ("tags", mkPage (Just "标签") 10 (Just "/tags/"))
+                , ("archive", mkPage Nothing 20 (Just "/archive/"))
+                ]
+        case classifyPages pages of
+            Right sp -> do
+                let nav = navItems sp
+                assertEqual "order" [("/tags/", "标签"), ("/archive/", "Archive"), ("/about/", "About")] (map (\(l, h) -> (h, l)) nav)
+            Left _ -> assertBool "expected success" False
+
+archiveYearGroups :: TestTree
+archiveYearGroups =
+    testCase "archive groups posts into year sections, newest first" $ do
+        let posts =
+                [ (postWithTags []){postDate = "2026-06-01", postTitle = "New"}
+                , (postWithTags []){postDate = "2026-01-01", postTitle = "Mid"}
+                , (postWithTags []){postDate = "2025-12-31", postTitle = "Old"}
+                ]
+        let page = renderHtml (renderArchive testConfig [] "Archive" posts)
+        assertBool "2026 section" ("<h2 class=\"archive-year\">2026</h2>" `textIn` page)
+        assertBool "2025 section" ("<h2 class=\"archive-year\">2025</h2>" `textIn` page)
+        assertBool "title" ("<title>Archive</title>" `textIn` page)
+        let sec2026 = findSubstring "<h2 class=\"archive-year\">2026</h2>" page
+            sec2025 = findSubstring "<h2 class=\"archive-year\">2025</h2>" page
+        assertBool "year order" (sec2026 < sec2025)
+        assertBool "newest first" (findSubstring ">New</a>" page < findSubstring ">Mid</a>" page)
+
+redirectPageMetaRefresh :: TestTree
+redirectPageMetaRefresh =
+    testCase "redirect pages carry a meta refresh and canonical link" $ do
+        let page = renderHtml (renderRedirect "/tags/")
+        assertBool "meta refresh" ("http-equiv=\"refresh\" content=\"0; url=/tags/\"" `textIn` page)
+        assertBool "canonical" ("rel=\"canonical\" href=\"/tags/\"" `textIn` page)
+        assertBool "link" ("href=\"/tags/\">/tags/</a>" `textIn` page)
+
+tagsLabelRejected :: TestTree
+tagsLabelRejected =
+    testCase "tagsLabel in config.yaml is a hard error" $ do
+        writeFile "/tmp/burogu-test/tagslabel.yaml" "siteName: x\ntagsLabel: Tags\n"
+        result <- try (loadConfig "/tmp/burogu-test/tagslabel.yaml") :: IO (Either ExitCode SiteConfig)
+        case result of
+            Left _ -> assertBool "rejected" True
+            Right _ -> assertBool "expected failure" False
+
 escapedPost :: Post
 escapedPost =
     (postWithTags ["essay"]){postTitle = "A & B", postBodyHtml = "<p>hi</p>", postDescription = Just "desc"}
@@ -713,7 +891,6 @@ testConfig =
         , siteDescription = "A test blog"
         , siteLang = "zh-CN"
         , siteBaseUrl = Just "https://lizi.moe"
-        , siteTagsLabel = "Tags"
         , siteCopyright = "© moe li"
         , siteGeneratedBy = Nothing
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}

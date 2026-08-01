@@ -3,7 +3,6 @@ baseUrl: https://lizi.moe
 siteAuthor: moe li
 siteDescription: A blog generated with burogu
 siteLang: zh-CN
-tagsLabel: Tags
 siteCopyright: © moe li
 siteGeneratedBy: Generated with Burogu
 # deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`

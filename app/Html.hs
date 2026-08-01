@@ -1,4 +1,4 @@
-module Html (PageMeta (..), groupByTag, postUrl, render404, renderCustomPage, renderIndex, renderPost, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
+module Html (PageMeta (..), groupByTag, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
 
 import Config (SiteConfig (..), Theme (..))
 import Data.Map.Strict qualified as Map
@@ -38,7 +38,6 @@ layout cfg navPages meta body =
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
                         L.a_ [L.href_ "/"] (L.toHtml (siteName cfg))
                         mapM_ renderNavPage navPages
-                        L.a_ [L.href_ "/tags/"] (L.toHtml (siteTagsLabel cfg))
                     L.main_ body
                     L.footer_ [L.class_ "site-footer"] $ L.p_ $ do
                         L.toHtml (siteCopyright cfg)
@@ -112,6 +111,44 @@ render404 cfg navPages = layout cfg navPages pageMeta $ L.div_ [L.class_ "not-fo
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = "404", pmOgType = "website", pmOgPath = "/404.html", pmOgDescription = Nothing, pmHasMath = False}
 
+{- | The archive page: all posts grouped into year sections, newest
+first. Posts must already be sorted by date descending.
+-}
+renderArchive :: SiteConfig -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
+renderArchive cfg navPages title posts = layout cfg navPages pageMeta (mapM_ yearSection (groupByYear posts))
+  where
+    pageMeta :: PageMeta
+    pageMeta = PageMeta{pmTitle = title, pmOgType = "website", pmOgPath = "/archive/", pmOgDescription = Nothing, pmHasMath = False}
+    yearSection :: (Text, [Post]) -> L.Html ()
+    yearSection (year, yearPosts) = do
+        L.h2_ [L.class_ "archive-year"] (L.toHtml year)
+        L.ul_ [L.class_ "post-list"] (mapM_ item yearPosts)
+    item :: Post -> L.Html ()
+    item post =
+        L.li_ [L.class_ "post-item"] $ do
+            L.time_ [L.class_ "post-date"] (L.toHtml (postDate post))
+            L.a_ [L.href_ (postUrl post)] (L.toHtml (postTitle post))
+            renderTags (postTags post)
+
+{- | A standalone redirect page (meta refresh + canonical link) for a
+page whose canonical URL differs from its own slug URL.
+-}
+renderRedirect :: Text -> L.Html ()
+renderRedirect target =
+    L.doctype_
+        *> L.html_
+            [L.lang_ "en"]
+            ( do
+                L.head_ $ do
+                    L.meta_ [L.charset_ "utf-8"]
+                    L.meta_ [LB.makeAttribute "http-equiv" "refresh", L.content_ ("0; url=" <> target)]
+                    L.link_ [L.rel_ "canonical", L.href_ target]
+                    L.title_ (L.toHtml ("Redirecting to " <> target))
+                L.body_ $ do
+                    L.p_ $ L.toHtml ("Redirecting to " :: Text)
+                    L.a_ [L.href_ target] (L.toHtml target)
+            )
+
 renderIndex :: SiteConfig -> [(Text, Text)] -> [Post] -> L.Html ()
 renderIndex cfg navPages posts = layout cfg navPages pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
@@ -136,11 +173,11 @@ renderPost cfg navPages post = layout cfg navPages pageMeta $ L.article_ $ do
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post, pmHasMath = postHasMath post}
 
-renderTagIndex :: SiteConfig -> [(Text, Text)] -> [(Text, [Post])] -> L.Html ()
-renderTagIndex cfg navPages groups = layout cfg navPages pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
+renderTagIndex :: SiteConfig -> [(Text, Text)] -> Text -> [(Text, [Post])] -> L.Html ()
+renderTagIndex cfg navPages label groups = layout cfg navPages pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
     pageMeta :: PageMeta
-    pageMeta = PageMeta{pmTitle = siteTagsLabel cfg, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
+    pageMeta = PageMeta{pmTitle = label, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
     item :: (Text, [Post]) -> L.Html ()
     item (tag, posts) =
         L.li_ [L.class_ "tag-item", LB.makeAttribute "style" ("--tag-count: " <> T.pack (show (length posts)))] $ do
@@ -167,6 +204,20 @@ groupByTag posts =
   where
     pair :: Post -> [(Text, [Post])]
     pair post = [(tag, [post]) | tag <- postTags post]
+
+{- | Group posts into year sections, preserving the input order (posts
+are date-descending, so years come out newest-first).
+-}
+groupByYear :: [Post] -> [(Text, [Post])]
+groupByYear = reverse . foldl step []
+  where
+    step :: [(Text, [Post])] -> Post -> [(Text, [Post])]
+    step [] post = [(yearOf post, [post])]
+    step (group@(year, yearPosts) : rest) post
+        | yearOf post == year = (year, yearPosts <> [post]) : rest
+        | otherwise = (yearOf post, [post]) : group : rest
+    yearOf :: Post -> Text
+    yearOf post = T.take 4 (postDate post)
 
 tagUrlPrefix :: Text
 tagUrlPrefix = "/tags/"

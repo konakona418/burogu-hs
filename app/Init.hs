@@ -24,7 +24,6 @@ configTemplate =
         , "siteAuthor: Your Name"
         , "siteDescription: A blog generated with burogu"
         , "siteLang: zh-CN"
-        , "tagsLabel: Tags"
         , "siteCopyright: © Your Name"
         , "siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide"
         , "# deploy:"
@@ -53,12 +52,14 @@ aboutTemplate =
     T.unlines
         [ "---"
         , "title: About"
+        , "priority: 30"
         , "---"
         , ""
         , "# About"
         , ""
         , "Write something about yourself here. This page lives in `_pages/about.md`;"
-        , "the frontmatter `title` becomes both the nav link label and the page title."
+        , "the frontmatter `title` becomes both the nav link label and the page title,"
+        , "and `priority` controls the nav order (lower comes first)."
         , "Remove the file to drop the page (and its nav link) entirely."
         ]
 
@@ -67,11 +68,37 @@ notFoundTemplate =
     T.unlines
         [ "---"
         , "title: 404"
+        , "redirectAs: /404.html"
         , "---"
         , ""
         , "# Page not found"
         , ""
         , "The page you are looking for does not exist. [Back to the home page](/)."
+        ]
+
+tagsTemplate :: Text
+tagsTemplate =
+    T.unlines
+        [ "---"
+        , "title: Tags"
+        , "redirectAs: /tags/"
+        , "priority: 10"
+        , "---"
+        , ""
+        , "<!-- Tags index page: burogu generates the tag list here. The frontmatter"
+        , "     controls the navbar entry (title = label, priority = order). -->"
+        ]
+
+archiveTemplate :: Text
+archiveTemplate =
+    T.unlines
+        [ "---"
+        , "title: Archive"
+        , "redirectAs: /archive/"
+        , "priority: 20"
+        , "---"
+        , ""
+        , "<!-- Archive page: burogu generates a yearly timeline of all posts here. -->"
         ]
 
 samplePost :: Text
@@ -146,6 +173,8 @@ run target = do
         TIO.writeFile (target </> "_post" </> "2026-07-31-hello-world.md") samplePost
         TIO.writeFile (target </> "_pages" </> "404.md") notFoundTemplate
         TIO.writeFile (target </> "_pages" </> "about.md") aboutTemplate
+        TIO.writeFile (target </> "_pages" </> "tags.md") tagsTemplate
+        TIO.writeFile (target </> "_pages" </> "archive.md") archiveTemplate
         TIO.writeFile (target </> "CNAME") "example.com\n"
         TIO.writeFile (target </> "theme.css") themeCss
         writeConfig
@@ -153,6 +182,8 @@ run target = do
         TIO.putStrLn ("  " <> T.pack target <> "/_post/2026-07-31-hello-world.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/404.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/about.md")
+        TIO.putStrLn ("  " <> T.pack target <> "/_pages/tags.md")
+        TIO.putStrLn ("  " <> T.pack target <> "/_pages/archive.md")
         TIO.putStrLn ("  " <> T.pack target <> "/CNAME")
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"
