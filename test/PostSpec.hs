@@ -100,6 +100,7 @@ tests =
         , fontStackQuoting
         , fontFaceEmitted
         , shaftPresetOutput
+        , shaftHarmonyRules
         , fontsFromJson
         , siteNameClass
         , tagSeparatorSpan
@@ -612,6 +613,20 @@ shaftPresetOutput =
         assertBool "404 big type" (".not-found h1" `textIn` css)
         assertBool "dark accent" ("#ff5347" `textIn` css)
         assertBool "no transitions" ("transition" `notTextIn` css)
+
+shaftHarmonyRules :: TestTree
+shaftHarmonyRules =
+    testCase "shaft harmony rules are present" $ do
+        let css = renderCss shaftPreset emptyFonts []
+        assertBool "ink list titles" (".post-item > a" `textIn` css)
+        assertBool "ink site name" ("border-right" `textIn` css)
+        assertBool "selection accent" ("::selection" `textIn` css)
+        assertBool "body h2 serif" ("h2" `textIn` css)
+        assertBool "body h3 serif" ("h3" `textIn` css)
+        assertBool "sharp corners" ("border-radius : 0" `textIn` css)
+        assertBool "mobile date column" ("min-width : 0" `textIn` css)
+        assertBool "accent site name" ("color           : var(--color-accent)" `textIn` css)
+        assertBool "serif everywhere" ("sans-serif" `notTextIn` css)
 
 fontsFromJson :: TestTree
 fontsFromJson =

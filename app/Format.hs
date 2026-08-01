@@ -171,8 +171,7 @@ emptyRawTheme :: RawTheme
 emptyRawTheme = RawTheme{rawMath = Nothing, rawMathUrl = Nothing, rawExtraCss = Nothing, rawExtraJs = Nothing, rawPreset = Nothing, rawFonts = Nothing}
 
 {- | Config keys the template knows about. Unknown top-level keys are
-warned about and dropped (the template round-trip does not preserve
-them).
+warned about and dropped.
 -}
 knownConfigKeys :: [Text]
 knownConfigKeys =

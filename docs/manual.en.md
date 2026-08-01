@@ -261,9 +261,10 @@ startup. Unknown keys are ignored.
 Override the preset's typography; every key is optional and falls
 back to the preset's defaults:
 
-`body`         font stack for body text (list of names)
-`display`      font stack for headings, dates and years (list of
-               names; shaft uses a serif stack by default)
+`body`         font stack for body text (list of names; shaft
+               defaults to a serif stack)
+`body`         font stack for body text (list of names; shaft
+               defaults to a serif stack)
 `code`         font stack for code (list of names; default: the
                browser's monospace)
 `size`         base font size, e.g. `17px`

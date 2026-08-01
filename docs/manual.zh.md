@@ -237,9 +237,8 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 
 覆盖预设的排版；每个键均可选，缺省回退到预设默认值：
 
-`body`         正文字体栈（名称列表）
-`display`      标题/日期/年份的展示字体栈（名称列表；shaft 默认
-               用衬线栈）
+`body`         正文字体栈（名称列表；shaft 默认用衬线栈）
+`body`         正文字体栈（名称列表；shaft 默认用衬线栈）
 `code`         代码字体栈（名称列表；默认：浏览器等宽字体）
 `size`         基础字号，如 `17px`
 `lineHeight`   基础行高，如 `28px`

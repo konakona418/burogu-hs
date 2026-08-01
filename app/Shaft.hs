@@ -1,6 +1,7 @@
 module Shaft (allPresets, presetByName, presetNames, shaftPreset) where
 
 import Clay qualified as C
+import Clay.Media qualified as CM
 import Css (Preset (..), TokenColor (..), ariaPreset, tokenColors)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
@@ -43,7 +44,7 @@ shaftBaseTokens =
     , ("color-code-bg", "#f0ede8")
     , ("color-mark", "#ffd97a")
     , ("color-accent", "#c4000e")
-    , ("font-family", "\"Helvetica Neue\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif")
+    , ("font-family", "Georgia, \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Songti SC\", \"SimSun\", serif")
     , ("font-size", "17px")
     , ("line-height", "28px")
     , ("content-width", "800px")
@@ -69,12 +70,17 @@ shaftDarkBaseTokens =
 shaftRules :: C.Css
 shaftRules = do
     displayHeadings
+    bodyHeadings
     siteName
+    inkTitles
     postDate
     postTags
     tagIndex
     archiveYear
     notFound
+    sharpCorners
+    selectionStyle
+    mobileDate
 
 displayHeadings :: C.Css
 displayHeadings =
@@ -83,12 +89,37 @@ displayHeadings =
         "font-size" C.-: "calc(var(--font-size) * 2.2)"
         "line-height" C.-: "calc(var(--line-height) * 1.3)"
 
+-- | In-article headings keep the serif display language of the h1.
+bodyHeadings :: C.Css
+bodyHeadings = do
+    C.h2 C.? do
+        "font-family" C.-: "var(--font-display)"
+        "font-size" C.-: "calc(var(--font-size) * 1.5)"
+        "line-height" C.-: "calc(var(--line-height) * 1.3)"
+    C.h3 C.? do
+        "font-family" C.-: "var(--font-display)"
+        "font-size" C.-: "calc(var(--font-size) * 1.2)"
+        "line-height" C.-: "calc(var(--line-height) * 1.3)"
+        "font-weight" C.-: "600"
+
 siteName :: C.Css
 siteName =
     (".site-name" :: C.Selector) C.? do
         "font-family" C.-: "var(--font-display)"
         "font-weight" C.-: "600"
         "letter-spacing" C.-: "0.02em"
+        "color" C.-: "var(--color-accent)"
+        C.textDecoration C.none
+        "border-right" C.-: "1px solid var(--color-accent)"
+        "padding-right" C.-: "var(--space-nav-link)"
+
+-- | Ink list titles, turning red on hover.
+inkTitles :: C.Css
+inkTitles = do
+    (".post-item > a" :: C.Selector) C.? do
+        "color" C.-: "var(--color-text)"
+        C.textDecoration C.none
+    (".post-item > a" :: C.Selector) C.# C.hover C.? ("color" C.-: "var(--color-accent)")
 
 postDate :: C.Css
 postDate =
@@ -156,3 +187,20 @@ notFound = do
         "margin-top" C.-: "0.75rem"
         "background-color" C.-: "var(--color-accent)"
         "clip-path" C.-: "polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%)"
+
+sharpCorners :: C.Css
+sharpCorners = do
+    (".search-input" :: C.Selector) C.? ("border-radius" C.-: "0")
+    C.code C.? ("border-radius" C.-: "0")
+    C.pre C.? ("border-radius" C.-: "0")
+
+selectionStyle :: C.Css
+selectionStyle =
+    C.element "::selection" C.? do
+        "background-color" C.-: "var(--color-accent)"
+        "color" C.-: "var(--color-bg)"
+
+-- | The aligned date column gives way on phones.
+mobileDate :: C.Css
+mobileDate =
+    C.query CM.screen [CM.maxWidth (C.px 600)] $ (".post-date" :: C.Selector) C.? ("min-width" C.-: "0")
