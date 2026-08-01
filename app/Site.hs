@@ -68,7 +68,7 @@ buildWork paths config posts = do
                 TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav posts)))
                 write404 paths config nav (sp404 sp)
                 writePages paths config nav (spNormal sp)
-                writeRedirects paths (specialPages sp)
+                writeRedirects paths (specialPages sp <> spRedirects sp)
                 writeStyleSheet paths config
                 mapM_ (writePost paths config nav) posts
                 writeTagPages paths config nav (spTags sp) posts

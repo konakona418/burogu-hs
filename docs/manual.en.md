@@ -300,21 +300,33 @@ detected automatically per post.
 Pages live in `src/_pages/*.md`; each becomes `/slug/` and is listed
 in the navigation:
 
-`title`      navigation label and page title
-`priority`   navigation position, lower first (default: 100)
-`redirectAs` declare this page as one of the built-in special pages:
-             `/tags/`, `/archive/`, `/search/`, `/404.html`
+`title`            navigation label and page title
+`priority`         navigation position, lower first (default: 100)
+`hiddenInNavbar`   `true` keeps the page out of the navigation (it
+                   stays reachable at /slug/)
+`redirectAs`       redirect this page: declare a special page, or
+                   point anywhere else (see below)
 
-When a page declares a special page, burogu generates that page (see
-below) instead of the markdown body, and the page's own slug URL
-redirects to it. A `redirectAs` pointing at anything else is a build
-error.
+With `redirectAs`, the page becomes a redirect stub: its slug URL
+serves an instant meta-refresh page (with a rel=canonical link) to
+the target, and the markdown body is not used. Targets must start
+with `/` (a site path) or `http(s)://` (an external URL); anything
+else is a build error. A target equal to the page's own slug URL is
+ignored.
+
+The special pages (redirectAs = one of `/tags/`, `/archive/`,
+`/search/`, `/404.html`) get generated content instead of the
+markdown body:
 
 - `/tags/` - the tag index (every tag with a link to its archive)
 - `/archive/` - all posts grouped by year
 - `/search/` - the client-side search page (see SEARCH)
 - `/404.html` - served by the preview server (and any static host)
   for missing pages; **its body is your own markdown**
+
+Every page type (normal, redirect stub, special) appears in the
+navigation by default, 404 included; `hiddenInNavbar: true` hides
+any of them.
 
 ### Static files and built-ins
 

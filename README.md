@@ -14,7 +14,7 @@ cabal run burogu -- sync push             # sync the site repo with a git remote
 cabal run burogu -- doc                   # view the man-page style manual
 ```
 
-Posts live in `src/_post/*.md`; pages in `src/_pages/*.md`.
+Posts live in `src/_post/*.md`; pages in `src/_pages/*.md`. Pages take `title`, `priority`, `hiddenInNavbar` (keep a page out of the nav) and `redirectAs` (declare a special page — tags, archive, search, 404 — or redirect to any path or URL).
 
 ## License
 

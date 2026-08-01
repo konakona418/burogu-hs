@@ -26,6 +26,7 @@ data CustomPage = CustomPage
     , cpHasMath :: Bool
     , cpPriority :: Int
     , cpRedirectAs :: Maybe Text
+    , cpHiddenInNavbar :: Bool
     , cpText :: Text
     }
     deriving (Eq, Show)
@@ -53,8 +54,10 @@ loadPage math path = do
                                 Left err -> pure (Left (T.pack (show err)))
                                 Right body -> case pagePriority doc of
                                     Left err -> pure (Left err)
-                                    Right priority ->
-                                        pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc, cpText = bodyText doc}))
+                                    Right priority -> case pageHiddenInNavbar doc of
+                                        Left err -> pure (Left err)
+                                        Right hidden ->
+                                            pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc, cpHiddenInNavbar = hidden, cpText = bodyText doc}))
 
 {- | Load all custom pages from a directory of markdown files. Each file
 becomes a page keyed by its basename without the .md extension; slugs
@@ -105,6 +108,13 @@ pagePriority (Pandoc meta _) =
         Just value -> case metaInt value of
             Just n -> Right n
             Nothing -> Left "invalid priority in frontmatter: expected an integer"
+
+pageHiddenInNavbar :: Pandoc -> Either Text Bool
+pageHiddenInNavbar (Pandoc meta _) =
+    case lookupMeta "hiddenInNavbar" meta of
+        Nothing -> Right False
+        Just (MetaBool b) -> Right b
+        Just _ -> Left "invalid hiddenInNavbar in frontmatter: expected true or false"
 
 metaInt :: MetaValue -> Maybe Int
 metaInt (MetaString t) = readMaybe (T.unpack t)

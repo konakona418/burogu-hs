@@ -275,20 +275,28 @@ site/                构建输出（每次构建重新生成）
 
 页面位于 `src/_pages/*.md`；每个成为 `/slug/`，并出现在导航中：
 
-`title`       导航标签与页面标题
-`priority`    导航位置，小的在前（默认：100）
-`redirectAs`  把本页声明为内置特殊页之一：`/tags/`、`/archive/`、
-              `/search/`、`/404.html`
+`title`            导航标签与页面标题
+`priority`         导航位置，小的在前（默认：100）
+`hiddenInNavbar`   `true` 让页面不出现在导航里（仍可通过 /slug/
+                   访问）
+`redirectAs`       重定向本页：声明特殊页，或指向任意地址（见下）
 
-页面声明特殊页后，burogu 生成对应页面（见下）而非 markdown
-正文，本页的 slug URL 会重定向到它。`redirectAs` 指向其他地址是
-构建错误。
+设置 `redirectAs` 后，本页变为重定向 stub：slug URL 提供指向目标
+的即时 meta-refresh 页面（带 rel=canonical 链接），markdown 正文
+不再使用。目标必须以 `/`（站内路径）或 `http(s)://`（外部 URL）
+开头，其余格式是构建错误；目标等于本页自己的 slug URL 时被忽略。
+
+特殊页（`redirectAs` 为 `/tags/`、`/archive/`、`/search/`、
+`/404.html` 之一）获得生成的内容而非 markdown 正文：
 
 - `/tags/` - 标签索引（每个标签带归档链接）
 - `/archive/` - 全部文章按年份分组
 - `/search/` - 客户端搜索页（见 SEARCH 节）
 - `/404.html` - 预览服务器（以及静态托管）对缺失页面提供的内容；
   **它的正文就是你的 markdown**
+
+所有页面类型（普通页、重定向 stub、特殊页，404 也不例外）默认
+都出现在导航里；`hiddenInNavbar: true` 可隐藏其中任意一个。
 
 ### 静态文件与内置产物
 

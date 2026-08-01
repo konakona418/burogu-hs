@@ -131,8 +131,14 @@ tests =
         , pageRedirectAsParsed
         , classifySpecialPages
         , classifyUnknownRedirectAs
+        , classifyExternalRedirect
+        , classifyInvalidRedirectAs
         , classifyDuplicateSpecial
         , classifyCollision
+        , hiddenInNavbarParsed
+        , hiddenInNavbarFiltersNav
+        , redirectStubNavVisibility
+        , notFoundInNavByDefault
         , navPriorityOrder
         , navPriorityTieLexicographic
         , navDefaultPriorityLast
@@ -147,6 +153,7 @@ tests =
         , searchPageScript
         , buildKeepsOutputOnPageError
         , fontFileMissingKeepsOldOutput
+        , redirectStubBuilt
         , docRenderPlain
         , docRenderColor
         , docHeadingDepth
@@ -875,7 +882,10 @@ pageRedirectAsParsed =
             _ -> assertBool "expected a page" False
 
 mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
-mkPage title priority redirect = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpText = ""}
+mkPage title priority redirect = mkPageHidden title priority redirect False
+
+mkPageHidden :: Maybe Text -> Int -> Maybe Text -> Bool -> CustomPage
+mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpText = ""}
 
 classifySpecialPages :: TestTree
 classifySpecialPages =
@@ -896,10 +906,28 @@ classifySpecialPages =
 
 classifyUnknownRedirectAs :: TestTree
 classifyUnknownRedirectAs =
-    testCase "an unregistered redirectAs is a hard error" $ do
-        let pages = [("misc", mkPage Nothing 0 (Just "/bogus/"))]
+    testCase "an arbitrary redirectAs becomes a redirect stub" $ do
+        let pages = [("old-post", mkPage (Just "Old") 0 (Just "/new-post/"))]
         case classifyPages pages of
-            Left errs -> assertBool "message" (any ("unknown redirectAs '/bogus/'" `T.isInfixOf`) errs)
+            Right sp -> do
+                assertEqual "redirects" ["old-post"] (map fst (spRedirects sp))
+                assertEqual "not normal" [] (map fst (spNormal sp))
+            Left errs -> assertBool ("expected success, got: " <> show errs) False
+
+classifyExternalRedirect :: TestTree
+classifyExternalRedirect =
+    testCase "external redirectAs URLs become redirect stubs" $ do
+        let pages = [("out", mkPage Nothing 0 (Just "https://example.com/x"))]
+        case classifyPages pages of
+            Right sp -> assertEqual "redirects" ["out"] (map fst (spRedirects sp))
+            Left errs -> assertBool ("expected success, got: " <> show errs) False
+
+classifyInvalidRedirectAs :: TestTree
+classifyInvalidRedirectAs =
+    testCase "a relative redirectAs is a hard error" $ do
+        let pages = [("misc", mkPage Nothing 0 (Just "new-page/"))]
+        case classifyPages pages of
+            Left errs -> assertBool "message" (any ("invalid redirectAs 'new-page/'" `T.isInfixOf`) errs)
             Right _ -> assertBool "expected failure" False
 
 classifyDuplicateSpecial :: TestTree
@@ -923,6 +951,55 @@ classifyCollision =
         case classifyPages pages of
             Left errs -> assertBool "message" (any ("collides with the declared special URL '/tags/'" `T.isInfixOf`) errs)
             Right _ -> assertBool "expected failure" False
+
+hiddenInNavbarParsed :: TestTree
+hiddenInNavbarParsed =
+    testCase "pages read the frontmatter hiddenInNavbar" $ do
+        writeFile "/tmp/burogu-test/hidden.md" "---\nhiddenInNavbar: true\n---\n# P\n"
+        writeFile "/tmp/burogu-test/visible.md" "---\n# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/hidden.md"
+        case result of
+            Right (Just page) -> assertEqual "hidden" True (cpHiddenInNavbar page)
+            _ -> assertBool "expected a page" False
+        result2 <- loadPage plainMath "/tmp/burogu-test/visible.md"
+        case result2 of
+            Right (Just page) -> assertEqual "visible" False (cpHiddenInNavbar page)
+            _ -> assertBool "expected a page" False
+
+hiddenInNavbarFiltersNav :: TestTree
+hiddenInNavbarFiltersNav =
+    testCase "hiddenInNavbar pages stay out of the nav" $ do
+        let pages =
+                [ ("secret", mkPageHidden (Just "Secret") 10 Nothing True)
+                , ("public", mkPage (Just "Public") 20 Nothing)
+                ]
+        case classifyPages pages of
+            Right sp -> assertEqual "nav" [("/public/", "Public")] (map (\(l, h) -> (h, l)) (navItems sp))
+            Left _ -> assertBool "expected success" False
+
+redirectStubNavVisibility :: TestTree
+redirectStubNavVisibility =
+    testCase "redirect stubs follow the hiddenInNavbar rule" $ do
+        let visible = [("old", mkPage (Just "Old") 0 (Just "/new/"))]
+            hidden = [("old", mkPageHidden (Just "Old") 0 (Just "/new/") True)]
+        case classifyPages visible of
+            Right sp -> assertEqual "stub visible by default" [("/old/", "Old")] (map (\(l, h) -> (h, l)) (navItems sp))
+            Left _ -> assertBool "expected success" False
+        case classifyPages hidden of
+            Right sp -> assertEqual "stub hidden" [] (navItems sp)
+            Left _ -> assertBool "expected success" False
+
+notFoundInNavByDefault :: TestTree
+notFoundInNavByDefault =
+    testCase "the 404 page joins the nav unless hidden" $ do
+        let pages = [("404", mkPage (Just "Oops") 0 (Just "/404.html"))]
+        case classifyPages pages of
+            Right sp -> assertEqual "404 in nav" [("/404.html", "Oops")] (map (\(l, h) -> (h, l)) (navItems sp))
+            Left _ -> assertBool "expected success" False
+        let hidden = [("404", mkPageHidden (Just "Oops") 0 (Just "/404.html") True)]
+        case classifyPages hidden of
+            Right sp -> assertEqual "404 hidden" [] (navItems sp)
+            Left _ -> assertBool "expected success" False
 
 navPriorityOrder :: TestTree
 navPriorityOrder =
@@ -1058,7 +1135,7 @@ buildKeepsOutputOnPageError =
     testCase "page errors keep the previous output directory" $ do
         createDirectoryIfMissing True "/tmp/burogu-test/build-src/_pages"
         createDirectoryIfMissing True "/tmp/burogu-test/build-out"
-        writeFile "/tmp/burogu-test/build-src/_pages/bad.md" "---\nredirectAs: /bogus/\n---\n# X\n"
+        writeFile "/tmp/burogu-test/build-src/_pages/bad.md" "---\nredirectAs: bogus/\n---\n# X\n"
         writeFile "/tmp/burogu-test/build-out/marker.txt" "old"
         let paths = Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/build-src", pOut = "/tmp/burogu-test/build-out"}
         result <- try (build paths testConfig []) :: IO (Either IOException BuildReport)
@@ -1083,6 +1160,22 @@ fontFileMissingKeepsOldOutput =
             Right _ -> assertBool "expected failure" False
         marker <- doesFileExist "/tmp/burogu-test/font-out/marker.txt"
         assertBool "old output kept" marker
+
+redirectStubBuilt :: TestTree
+redirectStubBuilt =
+    testCase "arbitrary redirectAs writes a redirect page at the slug URL" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/redir-src/_pages"
+        writeFile "/tmp/burogu-test/redir-src/_pages/old.md" "---\ntitle: Old\nredirectAs: /new/\n---\n# Old\n"
+        let paths = Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/redir-src", pOut = "/tmp/burogu-test/redir-out"}
+        result <- try (build paths testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got: " <> show err) False
+            Right _ -> pure ()
+        stub <- readFile "/tmp/burogu-test/redir-out/old/index.html"
+        assertBool "meta refresh" ("0; url=/new/" `textIn` T.pack stub)
+        assertBool "canonical" ("rel=\"canonical\" href=\"/new/\"" `textIn` T.pack stub)
+        index <- readFile "/tmp/burogu-test/redir-out/index.html"
+        assertBool "stub in nav by default" ("href=\"/old/\"" `textIn` T.pack index)
 
 docRenderPlain :: TestTree
 docRenderPlain =
