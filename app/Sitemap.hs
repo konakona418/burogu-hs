@@ -21,9 +21,7 @@ renderSitemap baseUrl posts navItems includeTags =
         urlEntry siteUrl Nothing
         mapM_ (\p -> urlEntry (baseUrl <> postUrl p) (Just (postDate p))) posts
         if includeTags
-            then do
-                urlEntry (baseUrl <> "/tags/") Nothing
-                mapM_ (\t -> urlEntry (baseUrl <> tagUrl t) Nothing) (map fst (groupByTag posts))
+            then mapM_ (\t -> urlEntry (baseUrl <> tagUrl t) Nothing) (map fst (groupByTag posts))
             else pure ()
         mapM_ (\(_, href) -> urlEntry (baseUrl <> href) Nothing) navItems
         urlEntry (baseUrl <> "/feed.xml") Nothing

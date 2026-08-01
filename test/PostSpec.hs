@@ -13,13 +13,14 @@ import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.Lazy qualified as TL
 import Feed (feedUrl, renderAtom)
-import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderSearch, renderTagArchive, renderTagIndex, tagUrl)
+import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
-import Search (renderSearchIndex)
-import Site (BuildReport (..), SitePages (..), build, classifyPages, navItems)
+import Registry (SitePages (..), classifyPages, navItems)
+import Search (renderSearch, renderSearchIndex)
+import Site (BuildReport (..), build)
 import Sitemap (renderSitemap)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode)
@@ -519,13 +520,14 @@ cliInvalidArg =
 sitemapUrls :: TestTree
 sitemapUrls =
     testCase "sitemap lists index, posts, tags and feed with absolute URLs" $ do
-        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] [] True
+        let xml = renderSitemap "https://lizi.moe" [postWithTags ["essay"]] [("Tags", "/tags/")] True
         assertBool "urlset" ("<urlset" `textIn` xml)
         assertBool "index" ("https://lizi.moe/" `textIn` xml)
         assertBool "post" ("https://lizi.moe/posts/test/" `textIn` xml)
         assertBool "tag index" ("https://lizi.moe/tags/" `textIn` xml)
         assertBool "tag archive" ("https://lizi.moe/tags/essay/" `textIn` xml)
         assertBool "feed" ("https://lizi.moe/feed.xml" `textIn` xml)
+        assertEqual "tag index once" 1 (T.count "<loc>https://lizi.moe/tags/</loc>" xml)
 
 sitemapLastmod :: TestTree
 sitemapLastmod =
