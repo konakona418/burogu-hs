@@ -146,6 +146,7 @@ baseRules = do
         "scrollbar-gutter" C.-: "stable"
         "-webkit-text-size-adjust" C.-: "100%"
         "-webkit-tap-highlight-color" C.-: "transparent"
+        "background-color" C.-: "var(--color-bg)"
     C.body C.? do
         "max-width" C.-: "var(--content-width)"
         C.marginLeft C.auto
@@ -157,6 +158,7 @@ baseRules = do
         "font-size" C.-: "var(--font-size)"
         "line-height" C.-: "var(--line-height)"
         "color" C.-: "var(--color-text)"
+        "background-color" C.-: "var(--color-bg)"
     C.a C.? do
         "color" C.-: "var(--color-link)"
         C.textDecoration C.underline
