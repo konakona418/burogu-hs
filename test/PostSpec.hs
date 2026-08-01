@@ -1,7 +1,7 @@
 module Main where
 
 import Cli (Command (..), Paths (..), cliInfo)
-import Config (SiteConfig (..), Theme (..))
+import Config (DeployConfig (..), SiteConfig (..), Theme (..))
 import Css (TokenColor (..), renderCss, tokenColors)
 import Data.ByteString qualified as BS
 import Data.Either (isLeft)
@@ -716,7 +716,7 @@ testConfig =
         , siteTagsLabel = "Tags"
         , siteCopyright = "© moe li"
         , siteGeneratedBy = Nothing
-        , siteDeployTarget = Nothing
+        , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}
         }

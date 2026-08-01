@@ -1,4 +1,4 @@
-module Config (SiteConfig (..), Theme (..), loadConfig) where
+module Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig) where
 
 import Control.Exception (IOException, catch)
 import Data.Aeson (FromJSON (..), withObject, (.:?))
@@ -21,9 +21,15 @@ data SiteConfig = SiteConfig
     , siteTagsLabel :: Text
     , siteCopyright :: Text
     , siteGeneratedBy :: Maybe Text
-    , siteDeployTarget :: Maybe Text
+    , siteDeploy :: DeployConfig
     , siteSrcRepo :: Maybe Text
     , siteTheme :: Theme
+    }
+
+data DeployConfig = DeployConfig
+    { deployTarget :: Maybe Text
+    , deployRepo :: Maybe Text
+    , deployBranch :: Maybe Text
     }
 
 data Theme = Theme
@@ -42,9 +48,15 @@ data RawConfig = RawConfig
     , rawTagsLabel :: Maybe Text
     , rawCopyright :: Maybe Text
     , rawGeneratedBy :: Maybe Text
-    , rawDeployTarget :: Maybe Text
+    , rawDeploy :: Maybe RawDeploy
     , rawSrcRepo :: Maybe Text
     , rawTheme :: Maybe RawTheme
+    }
+
+data RawDeploy = RawDeploy
+    { rawDeployTarget :: Maybe Text
+    , rawDeployRepo :: Maybe Text
+    , rawDeployBranch :: Maybe Text
     }
 
 data RawTheme = RawTheme
@@ -65,9 +77,16 @@ instance FromJSON RawConfig where
             <*> object .:? "tagsLabel"
             <*> object .:? "siteCopyright"
             <*> object .:? "siteGeneratedBy"
-            <*> object .:? "deployTarget"
+            <*> object .:? "deploy"
             <*> object .:? "srcRepo"
             <*> object .:? "theme"
+
+instance FromJSON RawDeploy where
+    parseJSON = withObject "deploy" $ \object ->
+        RawDeploy
+            <$> object .:? "target"
+            <*> object .:? "repo"
+            <*> object .:? "branch"
 
 instance FromJSON RawTheme where
     parseJSON = withObject "theme" $ \object ->
@@ -110,7 +129,11 @@ loadConfig path = do
         tagsLabel <- field "tagsLabel" (rawTagsLabel raw) (siteTagsLabel defaults)
         copyright <- field "siteCopyright" (rawCopyright raw) ("© " <> author)
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeployTarget = rawDeployTarget raw, siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteTagsLabel = tagsLabel, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+
+resolveDeploy :: Maybe RawDeploy -> DeployConfig
+resolveDeploy Nothing = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing}
+resolveDeploy (Just raw) = DeployConfig{deployTarget = rawDeployTarget raw, deployRepo = rawDeployRepo raw, deployBranch = rawDeployBranch raw}
 
 field :: Text -> Maybe Text -> Text -> IO Text
 field key Nothing fallback = do
@@ -181,7 +204,7 @@ defaults =
         , siteTagsLabel = "Tags"
         , siteCopyright = "© "
         , siteGeneratedBy = Nothing
-        , siteDeployTarget = Nothing
+        , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = defaultTheme
         }

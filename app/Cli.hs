@@ -21,7 +21,7 @@ data Command
     | Watch {wServe :: Maybe Int}
     | Init {iDir :: FilePath}
     | NewPost {nSlug :: Text, nDraft :: Bool}
-    | Deploy {dTarget :: Maybe Text}
+    | Deploy
     | Sync {sAction :: Text, sRepo :: Maybe Text}
 
 parseCommand :: IO Command
@@ -44,8 +44,8 @@ commands =
         <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild when sources change, optionally serve"))
         <> command "init" (info (Init <$> dirParser) (progDesc "Initialize an src/ tree"))
         <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
-        <> command "deploy" (info (Deploy <$> targetParser) (progDesc "Build and deploy the site via rsync"))
-        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync src/ with a remote git repository"))
+        <> command "deploy" (info (pure Deploy) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
+        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
 
 pathsParser :: Parser Paths
 pathsParser =
@@ -117,15 +117,6 @@ slugParser = strArgument (metavar "SLUG" <> help "Post slug (used in the filenam
 
 draftParser :: Parser Bool
 draftParser = switch (long "draft" <> help "Create a draft (no date)")
-
-targetParser :: Parser (Maybe Text)
-targetParser =
-    optional
-        ( strArgument
-            ( metavar "TARGET"
-                <> help "rsync target like user@host:/path (defaults to deployTarget in config.yaml)"
-            )
-        )
 
 actionParser :: Parser Text
 actionParser = strArgument (metavar "ACTION" <> help "push or pull")
