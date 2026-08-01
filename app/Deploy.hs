@@ -3,7 +3,6 @@ module Deploy (run) where
 import Build (runBuild)
 import Cli (Paths (..), defaultPaths)
 import Config (DeployConfig (..), SiteConfig (..), loadConfig)
-import Control.Exception (bracket)
 import Control.Monad (unless)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -11,10 +10,12 @@ import Data.Text.IO qualified as TIO
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import System.Directory (
+    XdgDirectory (XdgCache),
     copyFile,
     createDirectory,
+    createDirectoryIfMissing,
     doesDirectoryExist,
-    getTemporaryDirectory,
+    getXdgDirectory,
     listDirectory,
     removePathForcibly,
  )
@@ -23,8 +24,13 @@ import System.FilePath ((</>))
 import System.IO (stderr)
 import System.Process (callProcess, cwd, proc, readCreateProcessWithExitCode)
 
-run :: IO ()
-run = do
+run :: Bool -> IO ()
+run clearCacheFlag
+    | clearCacheFlag = clearCache
+    | otherwise = deploySite
+
+deploySite :: IO ()
+deploySite = do
     config <- loadConfig (pConfig defaultPaths)
     let d = siteDeploy config
     case (deployTarget d, deployRepo d) of
@@ -36,6 +42,20 @@ run = do
         (Nothing, Nothing) -> do
             TIO.hPutStrLn stderr "error: no deploy configuration."
             TIO.hPutStrLn stderr "usage: set deploy.target (rsync) or deploy.repo + deploy.branch (git) in config.yaml"
+            exitFailure
+
+clearCache :: IO ()
+clearCache = do
+    cache <- cacheDir
+    removePathForcibly cache
+    TIO.putStrLn ("deploy cache cleared: " <> T.pack cache)
+
+{- | The persistent git cache for git deployment: holds the deployed
+branch's history so each deploy fetches and pushes only the deltas
+(no full re-clone, no other branches, no force).
+-}
+cacheDir :: IO FilePath
+cacheDir = getXdgDirectory XdgCache "burogu-deploy"
 
 rsyncDeploy :: Text -> IO ()
 rsyncDeploy target = do
@@ -45,30 +65,38 @@ rsyncDeploy target = do
 gitDeploy :: Text -> Text -> IO ()
 gitDeploy repo branch = do
     runBuild defaultPaths
-    withClone repo $ \clone -> do
-        branchExists <- gitOk clone ["rev-parse", "--quiet", "--verify", "origin/" <> T.unpack branch]
-        if branchExists
-            then runGit clone ["checkout", "-q", "-B", T.unpack branch, "origin/" <> T.unpack branch]
-            else runGit clone ["checkout", "-q", "--orphan", T.unpack branch]
-        runGit clone ["rm", "-rq", "--ignore-unmatch", "."]
-        copyTree "site" clone
-        runGit clone ["add", "-A"]
-        (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]){cwd = Just clone} ""
-        if code == ExitSuccess
-            then TIO.putStrLn "nothing to deploy"
-            else do
-                message <- deployMessage
-                runGit clone ["commit", "-q", "-m", message]
-                runGit clone ["push", "--quiet", "origin", "HEAD:" <> T.unpack branch]
-                TIO.putStrLn ("deployed site to " <> repo <> " (" <> branch <> ")")
+    cache <- cacheDir
+    createDirectoryIfMissing True cache
+    runGit cache ["init", "--quiet"]
+    ensureRemote cache repo
+    branchExists <- gitOk cache ["ls-remote", "--exit-code", "origin", "refs/heads/" <> T.unpack branch]
+    if branchExists
+        then do
+            runGit cache ["fetch", "--quiet", "--depth", "1", "--no-tags", "origin", T.unpack branch]
+            runGit cache ["checkout", "-q", "-B", T.unpack branch, "FETCH_HEAD"]
+        else runGit cache ["checkout", "-q", "--orphan", T.unpack branch]
+    runGit cache ["rm", "-rq", "--ignore-unmatch", "."]
+    copyTree "site" cache
+    runGit cache ["add", "-A"]
+    (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]){cwd = Just cache} ""
+    if code == ExitSuccess
+        then TIO.putStrLn "nothing to deploy"
+        else do
+            message <- deployMessage
+            runGit cache ["-c", "user.name=burogu", "-c", "user.email=burogu@localhost", "commit", "-q", "-m", message]
+            runGit cache ["push", "--quiet", "origin", T.unpack branch]
+            TIO.putStrLn ("deployed site to " <> repo <> " (" <> branch <> ")")
 
-withClone :: Text -> (FilePath -> IO a) -> IO a
-withClone repo k = do
-    tmp <- getTemporaryDirectory
-    let clone = tmp </> "burogu-deploy"
-    removePathForcibly clone
-    runGit "" ["clone", "--quiet", T.unpack repo, clone]
-    bracket (pure clone) removePathForcibly k
+{- | Point the cache's origin remote at the given URL: set-url when
+origin already exists, add otherwise.
+-}
+ensureRemote :: FilePath -> Text -> IO ()
+ensureRemote dir repo = do
+    (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["remote", "get-url", "origin"]){cwd = Just dir} ""
+    let url = T.unpack repo
+    if code == ExitSuccess
+        then runGit dir ["remote", "set-url", "origin", url]
+        else runGit dir ["remote", "add", "origin", url]
 
 gitOk :: FilePath -> [String] -> IO Bool
 gitOk dir args = do

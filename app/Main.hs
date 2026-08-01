@@ -21,5 +21,5 @@ main = do
         Watch mServe -> runWatch mServe
         Init dir -> Init.run dir
         NewPost slug draft -> NewPost.run slug draft
-        Deploy -> Deploy.run
+        Deploy clear -> Deploy.run clear
         Sync action mRepo -> Sync.run action mRepo

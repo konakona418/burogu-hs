@@ -21,7 +21,7 @@ data Command
     | Watch {wServe :: Maybe Int}
     | Init {iDir :: FilePath}
     | NewPost {nSlug :: Text, nDraft :: Bool}
-    | Deploy
+    | Deploy {dClearCache :: Bool}
     | Sync {sAction :: Text, sRepo :: Maybe Text}
 
 parseCommand :: IO Command
@@ -44,7 +44,7 @@ commands =
         <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild when sources change, optionally serve"))
         <> command "init" (info (Init <$> dirParser) (progDesc "Initialize an src/ tree"))
         <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
-        <> command "deploy" (info (pure Deploy) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
+        <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
 
 pathsParser :: Parser Paths
@@ -117,6 +117,9 @@ slugParser = strArgument (metavar "SLUG" <> help "Post slug (used in the filenam
 
 draftParser :: Parser Bool
 draftParser = switch (long "draft" <> help "Create a draft (no date)")
+
+clearCacheParser :: Parser Bool
+clearCacheParser = switch (long "clear-cache" <> help "Remove the persistent git cache (next deploy re-fetches from scratch)")
 
 actionParser :: Parser Text
 actionParser = strArgument (metavar "ACTION" <> help "push or pull")
