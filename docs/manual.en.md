@@ -205,8 +205,10 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 
 `SECTION`  a section name as printed in the table of contents
            (e.g. `config`, `commands`); default: the whole manual
-`--lang`   `en` or `zh`; default: the system locale (zh* locales get
-           Chinese, anything else English)
+`--lang`   `en`, `zh`, `zh-Hant` or `ja`; default: the system
+           locale (ja* -> Japanese, zh_TW/zh_HK/zh_MO -> Traditional
+           Chinese, other zh* -> Simplified Chinese, anything else
+           English)
 `--color`  `auto`, `always` or `never`; default: auto (ANSI styling
            when printing to a terminal, plain text when piped)
 

@@ -188,8 +188,9 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 ```
 
 `SECTION`  章节名（如 `config`、`commands`）；默认：全文
-`--lang`   `en` 或 `zh`；默认：跟随系统 locale（zh* 语言环境得到
-           中文，其余得到英文）
+`--lang`   `en`、`zh`、`zh-Hant` 或 `ja`；默认：跟随系统 locale
+           （ja* 语言环境得到日文，zh_TW/zh_HK/zh_MO 得到繁体中文，
+           其余 zh* 得到简体中文，其他得到英文）
 `--color`  `auto`、`always` 或 `never`；默认：auto（输出到终端时
            用 ANSI 样式，被管道/重定向时输出纯文本）
 
@@ -238,7 +239,7 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 覆盖预设的排版；每个键均可选，缺省回退到预设默认值：
 
 `body`         正文字体栈（名称列表；shaft 默认用衬线栈）
-`body`         正文字体栈（名称列表；shaft 默认用衬线栈）
+`display`      标题/日期/年份的展示字体栈（名称列表；shaft 默认用衬线栈）
 `code`         代码字体栈（名称列表；默认：浏览器等宽字体）
 `size`         基础字号，如 `17px`
 `lineHeight`   基础行高，如 `28px`

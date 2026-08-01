@@ -1251,15 +1251,20 @@ docLangFromLocale :: TestTree
 docLangFromLocale =
     testCase "locale values map to languages" $ do
         assertEqual "zh locale" "zh" (langFromLocale ["zh_CN.UTF-8"])
-        assertEqual "zh case-insensitive" "zh" (langFromLocale ["ZH_TW"])
+        assertEqual "zh case-insensitive" "zh-Hant" (langFromLocale ["ZH_TW.UTF-8"])
+        assertEqual "traditional zh" "zh-Hant" (langFromLocale ["zh_TW.UTF-8"])
+        assertEqual "traditional zh hk" "zh-Hant" (langFromLocale ["zh_HK"])
+        assertEqual "traditional zh script" "zh-Hant" (langFromLocale ["zh-Hant-TW"])
+        assertEqual "ja locale" "ja" (langFromLocale ["ja_JP.UTF-8"])
+        assertEqual "ja script" "ja" (langFromLocale ["ja-JP"])
         assertEqual "en locale" "en" (langFromLocale ["en_US.UTF-8"])
         assertEqual "C locale" "en" (langFromLocale ["C"])
         assertEqual "no locale" "en" (langFromLocale [])
 
 manualsPresent :: TestTree
 manualsPresent =
-    testCase "both embedded manuals cover every section" $ do
-        mapM_ check ["en", "zh"]
+    testCase "all embedded manuals cover every section" $ do
+        mapM_ check ["en", "zh", "zh-Hant", "ja"]
   where
     required = ["name", "synopsis", "description", "commands", "configuration", "site layout", "search", "deployment", "sync", "files", "exit status", "see also"]
     check :: Text -> IO ()

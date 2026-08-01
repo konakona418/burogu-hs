@@ -34,9 +34,21 @@ manualZh = decodeUtf8 manualZhBytes
   where
     manualZhBytes = $(embedFile "docs/manual.zh.md")
 
+manualZhHant :: Text
+manualZhHant = decodeUtf8 manualZhHantBytes
+  where
+    manualZhHantBytes = $(embedFile "docs/manual.zh-Hant.md")
+
+manualJa :: Text
+manualJa = decodeUtf8 manualJaBytes
+  where
+    manualJaBytes = $(embedFile "docs/manual.ja.md")
+
 manualContent :: Text -> Text
 manualContent lang = case lang of
     "zh" -> manualZh
+    "zh-Hant" -> manualZhHant
+    "ja" -> manualJa
     _ -> manualEn
 
 run :: Maybe Text -> Maybe Text -> Maybe Text -> IO ()
@@ -52,13 +64,14 @@ run mSection mLang mColor = do
     TIO.putStr (render style body)
 
 {- | Resolve the manual language: an explicit --lang wins; otherwise
-follow the locale (LC_ALL, then LC_MESSAGES, then LANG). Any zh*
-locale selects Chinese; everything else English.
+follow the locale (LC_ALL, then LC_MESSAGES, then LANG). ja* locales
+select Japanese; zh_TW/zh_HK/zh_MO/zh-Hant select Traditional Chinese,
+other zh* locales Simplified Chinese; everything else English.
 -}
 resolveLang :: Maybe Text -> IO Text
 resolveLang (Just lang)
-    | lang `elem` ["en", "zh"] = pure lang
-    | otherwise = die ("unknown language '" <> T.unpack lang <> "'; use en or zh")
+    | lang `elem` ["en", "zh", "zh-Hant", "ja"] = pure lang
+    | otherwise = die ("unknown language '" <> T.unpack lang <> "'; use en, zh, zh-Hant or ja")
 resolveLang Nothing = do
     envs <- firstEnv ["LC_ALL", "LC_MESSAGES", "LANG"]
     pure (langFromLocale envs)
@@ -69,9 +82,17 @@ resolveLang Nothing = do
 langFromLocale :: [Text] -> Text
 langFromLocale = maybe "en" pick . listToMaybeEnv
   where
-    pick env
-        | "zh" `T.isPrefixOf` T.toLower env = "zh"
-        | otherwise = "en"
+    pick env =
+        let lower = T.toLower env
+         in if "ja" `T.isPrefixOf` lower
+                then "ja"
+                else
+                    if "zh" `T.isPrefixOf` lower
+                        then
+                            if any (`T.isInfixOf` lower) ["hant", "tw", "hk", "mo"]
+                                then "zh-Hant"
+                                else "zh"
+                        else "en"
 
 firstEnv :: [String] -> IO [Text]
 firstEnv = go []
