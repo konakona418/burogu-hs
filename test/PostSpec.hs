@@ -902,6 +902,8 @@ searchPageScript =
         assertBool "fetch" ("/search.json" `textIn` page)
         assertBool "hook" ("window.buroguSearch" `textIn` page)
         assertBool "default search" ("index.forEach" `textIn` page)
+        assertBool "highlight helper" ("function highlight" `textIn` page)
+        assertBool "snippet helper" ("function snippetAround" `textIn` page)
 
 escapedPost :: Post
 escapedPost =
