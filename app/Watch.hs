@@ -74,8 +74,15 @@ serveSite port = do
                 exists <- doesFileExist file
                 if exists
                     then BS.readFile file >>= \body -> sendAll conn (okResponse file body)
-                    else sendAll conn notFound
-            Nothing -> sendAll conn notFound
+                    else serveNotFound conn
+            Nothing -> serveNotFound conn
+    serveNotFound :: Socket -> IO ()
+    serveNotFound conn = do
+        let missing = "site" </> "404.html"
+        exists <- doesFileExist missing
+        if exists
+            then BS.readFile missing >>= \body -> sendAll conn (response "404 Not Found" missing body)
+            else sendAll conn notFound
 
 {- | Parse the request target from a request line: percent-decoded path
 with the query string stripped. Returns Nothing for non-GET requests.
@@ -118,8 +125,13 @@ percentDecode = BS.pack . go . BS.unpack
         | otherwise = w - 65 + 10
 
 okResponse :: FilePath -> BS.ByteString -> BS.ByteString
-okResponse file body =
-    "HTTP/1.1 200 OK\r\nContent-Type: "
+okResponse = response "200 OK"
+
+response :: BS.ByteString -> FilePath -> BS.ByteString -> BS.ByteString
+response status file body =
+    "HTTP/1.1 "
+        <> status
+        <> "\r\nContent-Type: "
         <> encodeUtf8 (contentType file)
         <> "\r\nContent-Length: "
         <> encodeUtf8 (T.pack (show (BS.length body)))

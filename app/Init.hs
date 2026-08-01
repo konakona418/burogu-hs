@@ -22,10 +22,13 @@ configTemplate =
         , "siteDescription: A blog generated with burogu"
         , "siteLang: zh-CN"
         , "tagsLabel: Tags"
+        , "siteCopyright: © Your Name"
+        , "siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide"
         , "# deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`"
         , "# srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`"
         , "theme:"
         , "  math: mathjax          # none | mathjax | katex"
+        , "  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js # optional: override the CDN URL"
         , "  extraCss: [theme.css]"
         , "  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"
         ]

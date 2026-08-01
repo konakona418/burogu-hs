@@ -98,6 +98,8 @@ tests =
         , aboutNavShown
         , aboutNavHidden
         , copyrightCustom
+        , footerCreditShown
+        , footerCreditHidden
         , loadPagesFromDir
         , loadPagesMissingDir
         , loadPagesErrorAggregation
@@ -611,6 +613,19 @@ copyrightCustom =
         let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [])
         assertBool "custom copyright" ("自定义版权" `textIn` page)
 
+footerCreditShown :: TestTree
+footerCreditShown =
+    testCase "footer shows the configured generator credit" $ do
+        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [])
+        assertBool "credit text" ("Generated with Burogu" `textIn` page)
+        assertBool "credit class" ("class=\"site-credit\"" `textIn` page)
+
+footerCreditHidden :: TestTree
+footerCreditHidden =
+    testCase "footer omits the generator credit when unset" $ do
+        let page = renderHtml (renderIndex testConfig [] [])
+        assertBool "no credit text" ("site-credit" `notTextIn` page)
+
 loadPagesFromDir :: TestTree
 loadPagesFromDir =
     testCase "loadPages reads all markdown pages with slugs in order" $ do
@@ -701,6 +716,7 @@ testConfig =
         , siteBaseUrl = Just "https://lizi.moe"
         , siteTagsLabel = "Tags"
         , siteCopyright = "© moe li"
+        , siteGeneratedBy = Nothing
         , siteDeployTarget = Nothing
         , siteSrcRepo = Nothing
         , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = []}

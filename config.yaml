@@ -4,9 +4,12 @@ siteAuthor: moe li
 siteDescription: A blog generated with burogu
 siteLang: zh-CN
 tagsLabel: Tags
+siteCopyright: © moe li
+siteGeneratedBy: Generated with Burogu
 # deployTarget: user@host:/var/www/lizi.moe   # optional rsync target for `deploy`
 # srcRepo: git@github.com:user/burogu-src.git # optional git repo for `sync`
 theme:
   math: mathjax
+  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js
   extraCss: [theme.css]
   # extraJs: [theme.js]    # optional: JS files under src/ loaded as deferred scripts on every page

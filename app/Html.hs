@@ -40,8 +40,13 @@ layout cfg navPages meta body =
                         mapM_ renderNavPage navPages
                         L.a_ [L.href_ "/tags/"] (L.toHtml (siteTagsLabel cfg))
                     L.main_ body
-                    L.footer_ [L.class_ "site-footer"] $ L.p_ (L.toHtml (siteCopyright cfg))
+                    L.footer_ [L.class_ "site-footer"] $ do
+                        L.p_ (L.toHtml (siteCopyright cfg))
+                        maybe (pure ()) renderCredit (siteGeneratedBy cfg)
             )
+  where
+    renderCredit :: Text -> L.Html ()
+    renderCredit credit = L.p_ [L.class_ "site-credit"] (L.toHtml credit)
 
 renderOg :: SiteConfig -> PageMeta -> L.Html ()
 renderOg cfg meta = do
