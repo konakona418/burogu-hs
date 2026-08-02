@@ -8,6 +8,7 @@ import Css (FontFile (..), Fonts (..), TokenColor (..), ariaPreset, emptyFonts, 
 import Data.ByteString qualified as BS
 import Data.Either (isLeft, isRight)
 import Data.List (sort)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -1929,6 +1930,13 @@ dslBuiltins =
         assertEqual "toJson escape" (Right "\"\"a\\\"b\"\"") (runLang "toJson(\"a\\\"b\")")
         assertEqual "toJson nil" (Right "\"null\"") (runLang "toJson(nil)")
         assertEqual "toJson fun" (Left "cannot serialize a function [\"toJson\"]") (runLangErr "toJson({ x -> x })")
+        assertEqual "formatDate zh" (Right "\"2026年8月2日\"") (runLang "formatDate(\"2026-08-02\", \"%Y年%-m月%-d日\")")
+        assertEqual "formatDate padded" (Right "\"2026-08-02\"") (runLang "formatDate(\"2026-08-02\", \"%Y-%m-%d\")")
+        assertEqual "formatDate month" (Right "\"August 2, 2026\"") (runLang "formatDate(\"2026-08-02\", \"%B %-d, %Y\")")
+        assertEqual "formatDate weekday" (Right "\"Sunday\"") (runLang "formatDate(\"2026-08-02\", \"%A\")")
+        assertEqual "formatDate literal" (Right "\"50%\"") (runLang "formatDate(\"2026-08-02\", \"50%%\")")
+        assertEqual "formatDate bad date" (Left "invalid date '2026-13-40' [\"formatDate\"]") (runLangErr "formatDate(\"2026-13-40\", \"%Y\")")
+        assertEqual "formatDate bad fmt" (Left "unsupported format directive '%H' [\"formatDate\"]") (runLangErr "formatDate(\"2026-08-02\", \"%H\")")
 
 dslPutsOutput :: TestTree
 dslPutsOutput =
@@ -1999,19 +2007,23 @@ scriptsTests =
     , scriptOutputWithRedirect
     , scriptOutputDuplicate
     , scriptOutputOverridesStatic
+    , buildScriptPageNav
+    , scriptDataInjected
+    , scriptDataBadYaml
+    , scriptDataIgnoresOthers
     ]
 
 scriptsEvalBasic :: TestTree
 scriptsEvalBasic =
     testCase "evalScript runs a script and returns its string" $ do
-        assertEqual "literal" (Right ("<p>hi</p>", [])) (evalScript (scriptCtx testConfig [] []) "\"<p>hi</p>\"")
-        assertEqual "expr" (Right ("42", [])) (evalScript (scriptCtx testConfig [] []) "\"#{6 * 7}\"")
-        assertEqual "puts" (Right ("1", ["hello"])) (evalScript (scriptCtx testConfig [] []) "puts(\"hello\") 1")
+        assertEqual "literal" (Right ("<p>hi</p>", [])) (evalScript (scriptCtx testConfig [] [] [] Map.empty) "\"<p>hi</p>\"")
+        assertEqual "expr" (Right ("42", [])) (evalScript (scriptCtx testConfig [] [] [] Map.empty) "\"#{6 * 7}\"")
+        assertEqual "puts" (Right ("1", ["hello"])) (evalScript (scriptCtx testConfig [] [] [] Map.empty) "puts(\"hello\") 1")
 
 scriptsCtxInjection :: TestTree
 scriptsCtxInjection =
     testCase "site, posts and tags are injected" $ do
-        let env = scriptCtx testConfig [postWithTags ["a"]] []
+        let env = scriptCtx testConfig [("About", "/about/"), ("Tags", "/tags/")] [postWithTags ["a"]] [] Map.empty
         assertEqual "site name" (Right ("burogu", [])) (evalScript env "get(site, \"siteName\")")
         assertEqual "site lang" (Right ("zh-CN", [])) (evalScript env "get(site, \"siteLang\")")
         assertEqual "post count" (Right ("1", [])) (evalScript env "toStr(len(posts))")
@@ -2020,13 +2032,16 @@ scriptsCtxInjection =
         assertEqual "tag count" (Right ("1", [])) (evalScript env "toStr(len(tags))")
         assertEqual "tag name" (Right ("a", [])) (evalScript env "get(at(tags, 0), \"name\")")
         assertEqual "tag count value" (Right ("1", [])) (evalScript env "toStr(get(at(tags, 0), \"count\"))")
+        assertEqual "nav count" (Right ("2", [])) (evalScript env "toStr(len(nav))")
+        assertEqual "nav label" (Right ("About", [])) (evalScript env "get((at(nav, 0)), \"label\")")
+        assertEqual "nav href" (Right ("/tags/", [])) (evalScript env "get((at(nav, 1)), \"href\")")
 
 scriptsErrorFormat :: TestTree
 scriptsErrorFormat =
     testCase "script errors carry message and call stack" $ do
-        assertEqual "syntax" (Left "line 1, column 1: unexpected ')'") (evalScript (scriptCtx testConfig [] []) ")")
-        assertEqual "runtime" (Left "undefined variable 'foo' []") (evalScript (scriptCtx testConfig [] []) "foo")
-        assertEqual "stack" (Left "division by zero [f]") (evalScript (scriptCtx testConfig [] []) "def f() 1 / 0 end f()")
+        assertEqual "syntax" (Left "line 1, column 1: unexpected ')'") (evalScript (scriptCtx testConfig [] [] [] Map.empty) ")")
+        assertEqual "runtime" (Left "undefined variable 'foo' []") (evalScript (scriptCtx testConfig [] [] [] Map.empty) "foo")
+        assertEqual "stack" (Left "division by zero [f]") (evalScript (scriptCtx testConfig [] [] [] Map.empty) "def f() 1 / 0 end f()")
 
 scriptFrontmatterField :: TestTree
 scriptFrontmatterField =
@@ -2181,3 +2196,58 @@ scriptOutputOverridesStatic =
             Right _ -> pure ()
         content <- TIO.readFile "/tmp/burogu-test/outov-out/data.json"
         assertEqual "overridden" "from script" (T.unpack content)
+
+buildScriptPageNav :: TestTree
+buildScriptPageNav =
+    testCase "a script page sees the navigation" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptnav-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptnav-src/_scripts"
+        writeFile "/tmp/burogu-test/scriptnav-src/_pages/about.md" "---\ntitle: About\npriority: 10\n---\n# About\n"
+        writeFile "/tmp/burogu-test/scriptnav-src/_pages/hello.md" "---\ntitle: Hello\nscript: hello.d\n---\n"
+        writeFile "/tmp/burogu-test/scriptnav-src/_scripts/hello.d" "join(map(nav, { n -> get(n, \"label\") }), \"|\")"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/scriptnav-src", pOut = "/tmp/burogu-test/scriptnav-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        content <- TIO.readFile "/tmp/burogu-test/scriptnav-out/hello/index.html"
+        assertBool "nav labels" ("About|Hello" `textIn` content)
+
+scriptDataInjected :: TestTree
+scriptDataInjected =
+    testCase "YAML files under _data are injected as the data binding" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/data-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/data-src/_scripts"
+        createDirectoryIfMissing True "/tmp/burogu-test/data-src/_data"
+        writeFile "/tmp/burogu-test/data-src/_pages/x.md" "---\nscript: x.d\n---\n"
+        writeFile "/tmp/burogu-test/data-src/_scripts/x.d" "toJson(get(data, \"links\"))"
+        writeFile "/tmp/burogu-test/data-src/_data/links.yaml" "- name: A\n  url: /a/\n- name: B\n  url: /b/\n"
+        writeFile "/tmp/burogu-test/data-src/_data/plain.yaml" "42\n"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/data-src", pOut = "/tmp/burogu-test/data-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        content <- TIO.readFile "/tmp/burogu-test/data-out/x/index.html"
+        assertBool "data map" ("[\n  {\n    \"name\": \"A\",\n    \"url\": \"/a/\"\n  },\n  {\n    \"name\": \"B\",\n    \"url\": \"/b/\"\n  }\n]" `textIn` content)
+
+scriptDataBadYaml :: TestTree
+scriptDataBadYaml =
+    testCase "invalid YAML under _data fails the build" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/databad-src/_data"
+        writeFile "/tmp/burogu-test/databad-src/_data/bad.yaml" "a: [unclosed\n"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/databad-src", pOut = "/tmp/burogu-test/databad-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptDataIgnoresOthers :: TestTree
+scriptDataIgnoresOthers =
+    testCase "non-YAML files under _data are ignored" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/dataoth-src/_data"
+        writeFile "/tmp/burogu-test/dataoth-src/_data/notes.txt" "not yaml at all\n"
+        writeFile "/tmp/burogu-test/dataoth-src/_data/keep.json" "{ nope\n"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/dataoth-src", pOut = "/tmp/burogu-test/dataoth-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        copied <- doesFileExist "/tmp/burogu-test/dataoth-out/notes.txt"
+        assertBool "not copied as static" (not copied)

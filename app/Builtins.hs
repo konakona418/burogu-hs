@@ -5,8 +5,11 @@ import Data.Map.Strict qualified as Map
 import Data.Scientific (toBoundedInteger)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Time (Day, fromGregorianValid, toGregorian)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Vector qualified as V
 import Eval (applyValueOut, truthy)
+import Text.Read (readMaybe)
 import Value (Env, LangError (..), Value (..), numericToText, showValue, strOf, valueToJson)
 
 {- | The builtin function table. `puts` collects its output (returned
@@ -42,6 +45,7 @@ builtins =
     , ("replace", b3 "replace" replaceOf)
     , ("take", b2 "take" takeOf)
     , ("drop", b2 "drop" dropOf)
+    , ("formatDate", b2 "formatDate" formatDateOf)
     ]
 
 ok :: Value -> Either LangError (Value, [Text])
@@ -219,6 +223,58 @@ dropOf c n = case (c, n) of
     _ -> typeErr "drop" ("array or string and number" <> ", got " <> showValue c <> " and " <> showValue n)
   where
     clamp k = max 0 (fromInteger (truncate k))
+
+{- | strftime-style date formatting for an ISO date (YYYY-MM-DD).
+Directives: %Y %y %m %d %b %B %a %A %% and %-m/%-d (no zero pad).
+Unknown directives are errors.
+-}
+formatDateOf :: Value -> Value -> Either LangError (Value, [Text])
+formatDateOf d f = case (d, f) of
+    (VStr date, VStr fmt) -> do
+        day <- either (Left . msg) Right (parseIsoDate date)
+        formatted <- either (Left . msg) Right (formatWith fmt day)
+        ok (VStr formatted)
+    _ -> typeErr "formatDate" ("date string and format string" <> ", got " <> showValue d <> " and " <> showValue f)
+
+parseIsoDate :: Text -> Either Text Day
+parseIsoDate t = case T.splitOn "-" t of
+    [y, m, d] -> case (readMaybe (T.unpack y) :: Maybe Integer, readMaybe (T.unpack m) :: Maybe Int, readMaybe (T.unpack d) :: Maybe Int) of
+        (Just yy, Just mm, Just dd) -> case fromGregorianValid yy mm dd of
+            Just day -> Right day
+            Nothing -> Left ("invalid date '" <> t <> "'")
+        _ -> Left ("invalid date '" <> t <> "'")
+    _ -> Left ("invalid date '" <> t <> "'")
+
+formatWith :: Text -> Day -> Either Text Text
+formatWith fmt day = go (T.unpack fmt)
+  where
+    (y, m, d) = toGregorian day
+
+    go [] = Right ""
+    go ('%' : c : rest) = case c of
+        'Y' -> (T.pack (show y) <>) <$> go rest
+        'y' -> (pad2 (fromInteger (y `mod` 100) :: Int) <>) <$> go rest
+        'm' -> (pad2 m <>) <$> go rest
+        'd' -> (pad2 d <>) <$> go rest
+        '-' -> case rest of
+            'm' : rest' -> (T.pack (show m) <>) <$> go rest'
+            'd' : rest' -> (T.pack (show d) <>) <$> go rest'
+            c' : _ -> Left ("unsupported format directive '%-" <> T.singleton c' <> "'")
+            [] -> Left "unterminated format directive"
+        'b' -> (shortMonth <>) <$> go rest
+        'B' -> (longMonth <>) <$> go rest
+        'a' -> (shortWeek <>) <$> go rest
+        'A' -> (longWeek <>) <$> go rest
+        '%' -> ("%" <>) <$> go rest
+        c' -> Left ("unsupported format directive '%" <> T.singleton c' <> "'")
+    go ('%' : []) = Left "unterminated format directive"
+    go (c : rest) = (T.singleton c <>) <$> go rest
+
+    pad2 n = if n < 10 then "0" <> T.pack (show n) else T.pack (show n)
+    shortMonth = T.pack (formatTime defaultTimeLocale "%b" day)
+    longMonth = T.pack (formatTime defaultTimeLocale "%B" day)
+    shortWeek = T.pack (formatTime defaultTimeLocale "%a" day)
+    longWeek = T.pack (formatTime defaultTimeLocale "%A" day)
 
 typeErr :: Text -> Text -> Either LangError a
 typeErr name want = Left (msg ("cannot " <> name <> ": expected " <> want))

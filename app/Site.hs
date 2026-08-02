@@ -15,7 +15,7 @@ import Lucid qualified as L
 import Page (CustomPage (..), loadPages)
 import Post (Post (..), mathMethod)
 import Registry (SitePages (..), classifyPages, defaultArchiveTitle, defaultSearchTitle, defaultTagsLabel, navItems, specialPages)
-import Scripts (runPageScripts)
+import Scripts (filterScriptPages, loadData, runPageScripts)
 import Search (renderSearch, renderSearchIndex)
 import Shaft (presetByName)
 import Sitemap (renderSitemap)
@@ -62,31 +62,41 @@ buildWork paths config posts = do
     case epages of
         Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
         Right pages -> do
-            epages' <- runPageScripts paths config posts pages
-            (pages', scriptFiles) <- case epages' of
+            (pages', outputSpecs) <- case filterScriptPages pages of
                 Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
                 Right r -> pure r
             case classifyPages pages' of
                 Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
-                Right sp -> do
-                    let nav = navItems sp
-                    removePathForcibly (pOut paths)
-                    createDirectoryIfMissing True (pOut paths)
-                    TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
-                    write404 paths config nav (sp404 sp)
-                    writePages paths config nav (spNormal sp)
-                    writeRedirects paths config (specialPages sp <> spRedirects sp)
-                    writeStyleSheet paths config
-                    mapM_ (writePost paths config nav posts) posts
-                    writeTagPages paths config nav (spTags sp) posts
-                    writeArchive paths config nav (spArchive sp) posts
-                    writeSearch paths config nav sp posts
-                    writeRobots paths config
-                    brFeed <- writeFeed paths config posts
-                    brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
-                    nStatic <- copyStatic paths
-                    writeScriptOutputs paths scriptFiles
-                    pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap, brScriptFiles = length scriptFiles}
+                Right spNav -> do
+                    let nav = navItems spNav
+                    edata <- loadData paths
+                    dataEnv <- case edata of
+                        Left errs -> ioError (userError (T.unpack (T.unlines (("_data: " <>) <$> errs))))
+                        Right env -> pure env
+                    scriptResult <- runPageScripts paths config nav posts pages' outputSpecs dataEnv
+                    (pages'', scriptFiles) <- case scriptResult of
+                        Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
+                        Right r -> pure r
+                    case classifyPages pages'' of
+                        Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
+                        Right sp -> do
+                            removePathForcibly (pOut paths)
+                            createDirectoryIfMissing True (pOut paths)
+                            TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
+                            write404 paths config nav (sp404 sp)
+                            writePages paths config nav (spNormal sp)
+                            writeRedirects paths config (specialPages sp <> spRedirects sp)
+                            writeStyleSheet paths config
+                            mapM_ (writePost paths config nav posts) posts
+                            writeTagPages paths config nav (spTags sp) posts
+                            writeArchive paths config nav (spArchive sp) posts
+                            writeSearch paths config nav sp posts
+                            writeRobots paths config
+                            brFeed <- writeFeed paths config posts
+                            brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
+                            nStatic <- copyStatic paths
+                            writeScriptOutputs paths scriptFiles
+                            pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap, brScriptFiles = length scriptFiles}
 
 write404 :: Paths -> SiteConfig -> [(Text, Text)] -> Maybe (Text, CustomPage) -> IO ()
 write404 paths config nav mEntry =
@@ -267,7 +277,7 @@ writeRobots paths config =
 copyStatic :: Paths -> IO Int
 copyStatic paths = do
     entries <- listDirectory (pSrc paths)
-    let others = filter (`notElem` ["_post", "_pages", "_scripts"]) entries
+    let others = filter (`notElem` ["_post", "_pages", "_scripts", "_data"]) entries
     mapM_ (copyTree (pSrc paths) (pOut paths)) others
     pure (length others)
 
