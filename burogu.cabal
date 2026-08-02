@@ -61,7 +61,7 @@ executable burogu
 
 test-suite burogu-test
     type:             exitcode-stdio-1.0
-    main-is:          PostSpec.hs
+    main-is:          BuroguSpec.hs
     other-modules:    Build
                     , Cli
                     , Config

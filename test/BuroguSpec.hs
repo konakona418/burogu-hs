@@ -531,7 +531,7 @@ cssExtraCssAppended =
 ariaPresetRegression :: TestTree
 ariaPresetRegression =
     testCase "aria preset output matches the pre-refactor golden" $ do
-        golden <- TIO.readFile "test/aria-style.css"
+        golden <- TIO.readFile "test/aria-style.expected.css"
         assertEqual "aria css" golden (renderCss ariaPreset emptyFonts [])
 
 presetLookup :: TestTree
@@ -1097,6 +1097,7 @@ redirectPageMetaRefresh =
         let page = renderHtml (renderRedirect "/tags/")
         assertBool "meta refresh" ("http-equiv=\"refresh\" content=\"0; url=/tags/\"" `textIn` page)
         assertBool "canonical" ("rel=\"canonical\" href=\"/tags/\"" `textIn` page)
+        assertBool "stylesheet" ("rel=\"stylesheet\" href=\"/style.css\"" `textIn` page)
         assertBool "link" ("href=\"/tags/\">/tags/</a>" `textIn` page)
 
 tagsLabelRejected :: TestTree
@@ -1419,7 +1420,7 @@ frontmatterDescriptionOmitted =
 configTemplateGolden :: TestTree
 configTemplateGolden =
     testCase "the config template renders to the golden output" $ do
-        golden <- TIO.readFile "test/config-template.golden"
+        golden <- TIO.readFile "test/config-template.expected.yaml"
         assertEqual "golden" golden (renderConfig defaultConfigTemplate emptyConfigValues)
 
 configFormatValues :: TestTree

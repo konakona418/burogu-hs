@@ -143,6 +143,7 @@ renderRedirect target =
                     L.meta_ [L.charset_ "utf-8"]
                     L.meta_ [LB.makeAttribute "http-equiv" "refresh", L.content_ ("0; url=" <> target)]
                     L.link_ [L.rel_ "canonical", L.href_ target]
+                    L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                     L.title_ (L.toHtml ("Redirecting to " <> target))
                 L.body_ $ do
                     L.p_ $ L.toHtml ("Redirecting to " :: Text)
