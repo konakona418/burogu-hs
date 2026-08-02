@@ -433,6 +433,16 @@ else expr end`（`else` 分支可省）。运算符：`+ - * / % == != <
 
 指令：%Y %y %m %d %b %B %a %A %%；%-m/%-d 去补零；未知指令报错。
 例：formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
+    formatDate(d, f)  strftime 风格日期格式化（ISO 日期）
+
+HTML helper（内容原样插入；文本用 `esc` 转义）：
+    el(name, attrs, content)  任意 tag；attrs：true=裸属性名，
+                              false/nil=省略，键值转义
+    esc(s)                    转义 & < > " '
+    h1 h2 p div span strong em time ul ol li  仅内容 tag
+    a(content, href)          href 转义的链接
+    img(src, alt)             空元素图片；alt 传 nil 省略
+    空元素（br、hr、img、input、meta、link、source）不输出闭合标签。
     puts(...)       打印参数到 stderr（返回 nil）
 
 #### 示例

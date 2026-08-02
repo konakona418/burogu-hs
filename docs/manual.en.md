@@ -484,6 +484,17 @@ Built-ins:
 Directives: %Y %y %m %d %b %B %a %A %%; %-m/%-d drop the
 zero pad; unknown directives are errors. Example:
 formatDate(date, "%Y年%-m月%-d日") -> 2026年8月2日
+    formatDate(d, f)  strftime-style date formatting (ISO date)
+
+HTML helpers (content is inserted as-is; escape text with `esc`):
+    el(name, attrs, content)  any tag; attrs: true = bare attribute,
+                              false/nil = omitted, keys/values escaped
+    esc(s)                    escape & < > " '
+    h1 h2 p div span strong em time ul ol li  content-only tags
+    a(content, href)          anchor with escaped href
+    img(src, alt)             void image; nil alt is omitted
+    Void elements (br, hr, img, input, meta, link, source) render
+    without a closing tag.
     puts(...)       prints arguments to stderr (returns nil)
 
 #### Example

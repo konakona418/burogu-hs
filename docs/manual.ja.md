@@ -490,6 +490,16 @@ site/                生成出力（生成のたびに作り直される）
 
 指令: %Y %y %m %d %b %B %a %A %%；%-m/%-d はゼロ埋めなし。
 不明な指令はエラー。例: formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
+    formatDate(d, f)  strftime 風の日付フォーマット（ISO 日付）
+
+HTML ヘルパー（コンテンツはそのまま挿入。テキストは `esc` でエスケープ）:
+    el(name, attrs, content)  任意のタグ。attrs: true=裸の属性、
+                              false/nil=省略、キーと値はエスケープ
+    esc(s)                    & < > " ' をエスケープ
+    h1 h2 p div span strong em time ul ol li  コンテンツのみのタグ
+    a(content, href)          href をエスケープしたアンカー
+    img(src, alt)             空要素の画像。alt は nil で省略
+    空要素（br、hr、img、input、meta、link、source）は閉じタグなし。
     puts(...)       引数を stderr に出力（nil を返す）
 
 #### 例
