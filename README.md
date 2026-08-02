@@ -17,7 +17,7 @@ cabal run burogu -- format --dry-run      # preview frontmatter/config normaliza
 cabal run burogu -- doc                   # view the man-page style manual
 ```
 
-Posts live in `src/_post/*.md`; pages in `src/_pages/*.md`. Pages take `title`, `priority`, `hiddenInNavbar` (keep a page out of the nav) and `redirectAs` (declare a special page — tags, archive, search, 404 — or redirect to any path or URL).
+Posts live in `src/_post/*.md` (with optional `toc: true`); pages in `src/_pages/*.md`. Pages take `title`, `priority`, `hiddenInNavbar` (keep a page out of the nav) and `redirectAs` (declare a special page — tags, archive, search, 404, the home page — or redirect to any path or URL).
 
 ## License
 

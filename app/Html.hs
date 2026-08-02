@@ -1,14 +1,20 @@
-module Html (PageMeta (..), groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
+{-# LANGUAGE TemplateHaskell #-}
+
+module Html (PageMeta (..), groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix, katexScript) where
 
 import Config (SiteConfig (..), Theme (..))
+import Control.Monad (when)
+import Data.Char (isSpace)
+import Data.FileEmbed (embedFile)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8)
 import Lucid qualified as L
 import Lucid.Base qualified as LB
 import Page (CustomPage (..))
-import Post (Post (..))
+import Post (Post (..), TocEntry (..))
 import Text.Pandoc.Options (defaultKaTeXURL, defaultMathJaxURL)
 
 data PageMeta = PageMeta
@@ -33,6 +39,7 @@ layout cfg navPages meta body =
                     renderOg cfg meta
                     renderMath cfg meta
                     renderExtraJs cfg
+                    L.script_ (themeScript :: Text)
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
@@ -79,22 +86,10 @@ renderExtraJs cfg = mapM_ scriptTag (themeExtraJs (siteTheme cfg))
     scriptTag file = L.script_ [L.defer_ "", L.src_ ("/" <> file)] (pure () :: L.Html ())
 
 katexScript :: Text
-katexScript =
-    T.unlines
-        [ "document.addEventListener(\"DOMContentLoaded\", function () {"
-        , " var mathElements = document.getElementsByClassName(\"math\");"
-        , " var macros = [];"
-        , " for (var i = 0; i < mathElements.length; i++) {"
-        , "  var texText = mathElements[i].firstChild;"
-        , "  if (mathElements[i].tagName == \"SPAN\") {"
-        , "   katex.render(texText.data, mathElements[i], {"
-        , "    displayMode: mathElements[i].classList.contains('display'),"
-        , "    throwOnError: false,"
-        , "    macros: macros,"
-        , "    fleqn: false"
-        , "   });"
-        , "}}});"
-        ]
+katexScript = decodeUtf8 $(embedFile "js/katex.js")
+
+themeScript :: Text
+themeScript = decodeUtf8 $(embedFile "js/theme.js")
 
 renderNavPage :: (Text, Text) -> L.Html ()
 renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
@@ -150,8 +145,14 @@ renderRedirect target =
                     L.a_ [L.href_ target] (L.toHtml target)
             )
 
-renderIndex :: SiteConfig -> [(Text, Text)] -> [Post] -> L.Html ()
-renderIndex cfg navPages posts = layout cfg navPages pageMeta $ L.ul_ [L.class_ "post-list"] (mapM_ item posts)
+renderIndex :: SiteConfig -> [(Text, Text)] -> Maybe CustomPage -> [Post] -> L.Html ()
+renderIndex cfg navPages mIndexPage posts = layout cfg navPages pageMeta $ do
+    case mIndexPage of
+        Nothing -> L.ul_ [L.class_ "post-list"] (mapM_ item posts)
+        Just page -> do
+            L.div_ [L.class_ "post-body index-body"] (L.toHtmlRaw (cpBodyHtml page))
+            L.h2_ [L.class_ "index-title"] (L.toHtml ("文章" :: Text))
+            L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = siteName cfg, pmOgType = "website", pmOgPath = "/", pmOgDescription = Nothing, pmHasMath = False}
@@ -163,16 +164,53 @@ renderIndex cfg navPages posts = layout cfg navPages pageMeta $ L.ul_ [L.class_ 
             renderTags (postTags post)
             maybe (pure ()) renderDescription (postDescription post)
 
-renderPost :: SiteConfig -> [(Text, Text)] -> Post -> L.Html ()
-renderPost cfg navPages post = layout cfg navPages pageMeta $ L.article_ $ do
+renderPost :: SiteConfig -> [(Text, Text)] -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
+renderPost cfg navPages neighbors post = layout cfg navPages pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml (postTitle post))
     L.p_ [L.class_ "post-meta"] $ do
         L.time_ (L.toHtml (postDate post))
         renderTags (postTags post)
+        L.span_ [L.class_ "post-meta-time"] (L.toHtml (readingLabel cfg post))
+    when (postShowToc post && not (null (postToc post))) (renderToc (postToc post))
     L.div_ [L.class_ "post-body"] (L.toHtmlRaw (postBodyHtml post))
+    renderPostNav neighbors
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post, pmHasMath = postHasMath post}
+
+renderToc :: [TocEntry] -> L.Html ()
+renderToc entries = L.nav_ [L.class_ "toc"] $ L.ul_ $ mapM_ item entries
+  where
+    item :: TocEntry -> L.Html ()
+    item entry = L.li_ $ L.a_ [L.href_ ("#" <> tocId entry)] (L.toHtml (tocTitle entry))
+
+renderPostNav :: (Maybe Post, Maybe Post) -> L.Html ()
+renderPostNav (prev, next) = L.nav_ [L.class_ "post-nav"] $ L.ul_ $ do
+    maybe (pure ()) renderPrev prev
+    maybe (pure ()) renderNext next
+  where
+    renderPrev :: Post -> L.Html ()
+    renderPrev p = L.li_ [L.class_ "post-nav-prev"] $ do
+        L.span_ (L.toHtml ("← " :: Text))
+        L.a_ [L.href_ (postUrl p)] (L.toHtml (postTitle p))
+    renderNext :: Post -> L.Html ()
+    renderNext p = L.li_ [L.class_ "post-nav-next"] $ do
+        L.a_ [L.href_ (postUrl p)] (L.toHtml (postTitle p))
+        L.span_ (L.toHtml (" →" :: Text))
+
+readingLabel :: SiteConfig -> Post -> Text
+readingLabel cfg post =
+    let minutes = readingMinutes post
+     in if "zh" `T.isPrefixOf` T.toLower (siteLang cfg)
+            then "约 " <> T.pack (show minutes) <> " 分钟"
+            else T.pack (show minutes) <> " min read"
+
+readingMinutes :: Post -> Int
+readingMinutes post =
+    let text = postText post
+        chars = T.length (T.filter (not . isSpace) text)
+        words = length (T.words text)
+     in max 1 (max (chars `div` 400) (words `div` 200))
 
 renderTagIndex :: SiteConfig -> [(Text, Text)] -> Text -> [(Text, [Post])] -> L.Html ()
 renderTagIndex cfg navPages label groups = layout cfg navPages pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)

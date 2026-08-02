@@ -136,13 +136,14 @@ stylesheet :: Preset -> [(Text, Text)] -> C.Css
 stylesheet preset fontTokens =
     mconcat
         [ rootTokens (presetTokens preset <> fontTokens)
-        , darkTokens (presetDarkTokens preset)
+        , darkTokens (presetTokens preset) (presetDarkTokens preset)
         , baseRules
         , overflowRules
         , listSpacing
         , mobileRules
         , tokenRules
         , presetRules preset
+        , printRules
         ]
 
 {- | Tokens emitted after the preset tokens for the user font overrides;
@@ -208,6 +209,7 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
         "--space-page-side" C.-: "12px"
     C.pre C.? ("font-size" C.-: "14px")
     C.nav C.? C.a C.? ("padding" C.-: "8px 4px")
+    (".site-name" :: C.Selector) C.? ("flex-basis" C.-: "100%")
 
 listSpacing :: C.Css
 listSpacing = do
@@ -231,8 +233,18 @@ listSpacing = do
 rootTokens :: [(Text, Text)] -> C.Css
 rootTokens tokens = (":root" :: C.Selector) C.? mapM_ emit tokens
 
-darkTokens :: [(Text, Text)] -> C.Css
-darkTokens tokens = C.query CM.screen [CM.prefersColorScheme CM.dark] $ (":root" :: C.Selector) C.? mapM_ emit tokens
+{- | Dark tokens are emitted three times: under the system
+prefers-color-scheme query, and under explicit html[data-theme] values
+(the theme.js toggle). The attribute selectors outrank :root, so an
+explicit light/dark choice wins over the system preference.
+-}
+darkTokens :: [(Text, Text)] -> [(Text, Text)] -> C.Css
+darkTokens light dark =
+    mconcat
+        [ C.query CM.screen [CM.prefersColorScheme CM.dark] $ (":root" :: C.Selector) C.? mapM_ emit dark
+        , C.element "html[data-theme=\"dark\"]" C.? mapM_ emit dark
+        , C.element "html[data-theme=\"light\"]" C.? mapM_ emit light
+        ]
 
 emit :: (Text, Text) -> C.Css
 emit (key, value) = C.Key (C.Plain ("--" <> key)) C.-: value
@@ -296,7 +308,20 @@ baseRules = do
         "line-height" C.-: "calc(var(--line-height) * 1.45)"
     C.time C.? ("color" C.-: "var(--color-muted)")
     (".tag-count" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
-    (".site-footer" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
+    (".site-footer" :: C.Selector) C.? do
+        "color" C.-: "var(--color-muted)"
+        C.display C.flex
+        "justify-content" C.-: "space-between"
+        "align-items" C.-: "baseline"
+    (".theme-toggle" :: C.Selector) C.? do
+        "border" C.-: "none"
+        "background" C.-: "none"
+        "color" C.-: "inherit"
+        "font-size" C.-: "1em"
+        "padding" C.-: "0"
+        "cursor" C.-: "pointer"
+        "font-family" C.-: "var(--font-family)"
+        "line-height" C.-: "var(--line-height)"
     C.code C.? do
         "background-color" C.-: "var(--color-code-bg)"
         C.paddingLeft (C.px 4)
@@ -310,8 +335,13 @@ baseRules = do
     C.pre C.? C.code C.? ("background-color" C.-: "transparent")
     C.ul C.? C.listStyleType C.none
     C.li C.? ("margin-bottom" C.-: "var(--space-list-gap)")
-    C.nav C.? ("margin-bottom" C.-: "var(--space-nav-gap)")
-    C.nav C.? C.a C.? ("margin-right" C.-: "var(--space-nav-link)")
+    C.nav C.? do
+        C.display C.flex
+        C.flexWrap CF.wrap
+        "align-items" C.-: "baseline"
+        "gap" C.-: "var(--space-list-gap) var(--space-nav-link)"
+        "margin-bottom" C.-: "var(--space-nav-gap)"
+    (".post-desc" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
     C.a C.# ("aria-hidden" C.@= "true") C.? C.display C.none
     C.mark C.? do
         "background-color" C.-: "var(--color-mark)"
@@ -333,6 +363,17 @@ baseRules = do
     C.element "input[type=search]::-webkit-search-cancel-button" C.? do
         "-webkit-appearance" C.-: "none"
         "appearance" C.-: "none"
+
+printRules :: C.Css
+printRules =
+    C.query CM.print [] $ do
+        C.html C.? ("background-color" C.-: "#ffffff")
+        C.body C.? do
+            "background-color" C.-: "#ffffff"
+            "color" C.-: "#000000"
+        C.a C.? ("color" C.-: "#000000")
+        C.nav C.? C.display C.none
+        C.mark C.? ("background-color" C.-: "transparent")
 
 tokenRules :: C.Css
 tokenRules = mapM_ tokenRule tokenColors

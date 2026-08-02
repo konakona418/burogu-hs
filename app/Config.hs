@@ -2,13 +2,15 @@ module Config (DeployConfig (..), RawConfig (..), RawDeploy (..), RawTheme (..),
 
 import Control.Exception (IOException, catch)
 import Css (Fonts (..), emptyFonts)
-import Data.Aeson (FromJSON (..), withObject, (.:?))
+import Data.Aeson (FromJSON (..), Value (..), withObject, (.:?))
+import Data.Aeson.Key qualified as K
+import Data.Aeson.KeyMap qualified as KM
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
-import Data.Yaml (decodeEither', prettyPrintParseException)
+import Data.Yaml (ParseException, decodeEither', prettyPrintParseException)
 import Shaft (presetNames)
 import System.Exit (exitFailure)
 import System.IO (stderr)
@@ -133,7 +135,9 @@ loadConfig path = do
         Right content ->
             case decodeEither' (encodeUtf8 content) of
                 Left err -> die ("failed to parse YAML: " <> T.pack (prettyPrintParseException err))
-                Right raw -> apply raw
+                Right raw -> do
+                    warnUnknownKeys content
+                    apply raw
   where
     apply raw = do
         name <- field "siteName" (rawName raw) (siteName defaults)
@@ -221,6 +225,32 @@ resolveMathUrl _ (Just raw)
 
 validMathMethods :: [Text]
 validMathMethods = ["none", "mathjax", "katex"]
+
+{- | Warn about top-level config keys the generator does not know
+(they are ignored). tagsLabel is known and rejected elsewhere.
+-}
+warnUnknownKeys :: Text -> IO ()
+warnUnknownKeys content = case decodeEither' (encodeUtf8 content) :: Either ParseException Value of
+    Right (Object o) ->
+        mapM_
+            (\k -> warn ("config.yaml: unknown key '" <> k <> "' ignored"))
+            [k | k <- map K.toText (KM.keys o), k `notElem` knownKeys]
+    _ -> pure ()
+
+knownKeys :: [Text]
+knownKeys =
+    [ "siteName"
+    , "siteAuthor"
+    , "siteDescription"
+    , "siteLang"
+    , "baseUrl"
+    , "tagsLabel"
+    , "siteCopyright"
+    , "siteGeneratedBy"
+    , "deploy"
+    , "srcRepo"
+    , "theme"
+    ]
 
 defaults :: SiteConfig
 defaults =

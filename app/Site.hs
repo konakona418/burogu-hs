@@ -4,7 +4,7 @@ import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch, throwIO)
 import Css (FontFile (..), Fonts (..), renderCss)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -65,12 +65,12 @@ buildWork paths config posts = do
                 let nav = navItems sp
                 removePathForcibly (pOut paths)
                 createDirectoryIfMissing True (pOut paths)
-                TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav posts)))
+                TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
                 write404 paths config nav (sp404 sp)
                 writePages paths config nav (spNormal sp)
                 writeRedirects paths (specialPages sp <> spRedirects sp)
                 writeStyleSheet paths config
-                mapM_ (writePost paths config nav) posts
+                mapM_ (writePost paths config nav posts) posts
                 writeTagPages paths config nav (spTags sp) posts
                 writeArchive paths config nav (spArchive sp) posts
                 writeSearch paths config nav sp posts
@@ -183,11 +183,16 @@ validateExtraJs paths config =
             then pure ()
             else ioError (userError ("extra JS file not found in " <> pSrc paths <> ": " <> T.unpack file))
 
-writePost :: Paths -> SiteConfig -> [(Text, Text)] -> Post -> IO ()
-writePost paths config nav post = do
+writePost :: Paths -> SiteConfig -> [(Text, Text)] -> [Post] -> Post -> IO ()
+writePost paths config nav allPosts post = do
     let dir = pOut paths </> postsDirName </> T.unpack (postSlug post)
     createDirectoryIfMissing True dir
-    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config nav post)))
+    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config nav (neighborsOf post allPosts) post)))
+
+neighborsOf :: Post -> [Post] -> (Maybe Post, Maybe Post)
+neighborsOf post posts = case break ((== postSlug post) . postSlug) posts of
+    (before, _ : after) -> (listToMaybe (reverse before), listToMaybe after)
+    _ -> (Nothing, Nothing)
 
 writeTagPages :: Paths -> SiteConfig -> [(Text, Text)] -> Maybe (Text, CustomPage) -> [Post] -> IO ()
 writeTagPages paths config nav mTagsPage posts =

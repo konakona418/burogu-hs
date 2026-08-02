@@ -23,7 +23,7 @@ import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Paths_burogu (getDataFileName)
-import Post (Post (..), mathMethod, parsePost, warnCaseTags)
+import Post (Post (..), TocEntry (..), mathMethod, parsePost, warnCaseTags)
 import Posts (runDraft, runNew, runPublish)
 import Registry (SitePages (..), classifyPages, navItems)
 import Search (renderSearch, renderSearchIndex)
@@ -176,6 +176,17 @@ tests =
         , postsPublishNonDraftRejected
         , postsPublishMissingRejected
         , postsPublishLegacyDraft
+        , postTocParsed
+        , tocFrontmatterParsed
+        , renderPostTocShown
+        , renderPostTocHidden
+        , readingTimeShown
+        , postNavRendered
+        , indexSpecialPageClassified
+        , indexPageRenderedOnHome
+        , indexPageExcludedFromNav
+        , darkThemeAttributeSelectors
+        , themeToggleScriptInjected
         , frontmatterPageDefaults
         , frontmatterNoDateError
         , frontmatterDraftNoDate
@@ -273,6 +284,90 @@ postsPublishLegacyDraft =
                 content <- readFile path
                 assertBool "date added" ("date: " `textIn` T.pack content)
                 assertBool "draft gone" ("draft: true" `notTextIn` T.pack content)
+
+postTocParsed :: TestTree
+postTocParsed =
+    testCase "post headings are extracted with ids" $ do
+        result <- parsePost plainMath "/tmp/x/2026-08-01-t.md" "---\ntitle: T\n---\n\n# One\n\n## Two\n"
+        assertRight result $ \post -> do
+            assertEqual "entries" [("One", "one"), ("Two", "two")] [(tocTitle e, tocId e) | e <- postToc post]
+
+tocFrontmatterParsed :: TestTree
+tocFrontmatterParsed =
+    testCase "the toc flag is read from frontmatter" $ do
+        result <- parsePost plainMath "/tmp/x/2026-08-01-t.md" "---\ntitle: T\ntoc: true\n---\n\n# One\n"
+        assertRight result $ \post -> assertEqual "toc" True (postShowToc post)
+
+renderPostTocShown :: TestTree
+renderPostTocShown =
+    testCase "a toc-enabled post renders the heading list" $ do
+        let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
+            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+        assertBool "toc nav" ("<nav class=\"toc\">" `textIn` page)
+        assertBool "toc link" ("href=\"#second\">Second</a>" `textIn` page)
+
+renderPostTocHidden :: TestTree
+renderPostTocHidden =
+    testCase "a post without toc stays clean" $ do
+        let post = (postWithTags []){postToc = [TocEntry 2 "Second" "second"]}
+            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+        assertBool "no toc" ("class=\"toc\"" `notTextIn` page)
+
+readingTimeShown :: TestTree
+readingTimeShown =
+    testCase "the reading time is shown in the post meta" $ do
+        let post = (postWithTags []){postText = T.replicate 900 "字"}
+            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+        assertBool "zh label" ("约 2 分钟" `textIn` page)
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] (Nothing, Nothing) post)
+        assertBool "en label" ("min read" `textIn` enPage)
+
+postNavRendered :: TestTree
+postNavRendered =
+    testCase "prev and next posts are linked at the bottom" $ do
+        let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
+            newer = (postWithTags []){postSlug = "newer", postTitle = "Newer", postDate = "2026-03-01"}
+            page = renderHtml (renderPost testConfig [] (Just newer, Just older) (postWithTags []))
+        assertBool "prev link" ("href=\"/posts/newer/\">Newer</a>" `textIn` page)
+        assertBool "next link" ("href=\"/posts/older/\">Older</a>" `textIn` page)
+
+indexSpecialPageClassified :: TestTree
+indexSpecialPageClassified =
+    testCase "redirectAs / declares the index page" $ do
+        let pages = [("index", mkPage (Just "Home") 0 (Just "/"))]
+        case classifyPages pages of
+            Right sp -> assertBool "spIndex" (isJust (spIndex sp))
+            Left errs -> assertBool ("expected success, got: " <> show errs) False
+
+indexPageRenderedOnHome :: TestTree
+indexPageRenderedOnHome =
+    testCase "the index page renders above the post list" $ do
+        let page = renderHtml (renderIndex testConfig [] (Just (mkPage (Just "Home") 0 Nothing)) [postWithTags []])
+        assertBool "index body" ("<div class=\"post-body index-body\">" `textIn` page)
+        assertBool "section title" ("index-title" `textIn` page)
+        assertBool "post list" ("post-list" `textIn` page)
+
+indexPageExcludedFromNav :: TestTree
+indexPageExcludedFromNav =
+    testCase "the index page is not in the navbar" $ do
+        let pages = [("index", mkPage (Just "Home") 0 (Just "/")), ("about", mkPage (Just "About") 10 Nothing)]
+        case classifyPages pages of
+            Right sp -> assertEqual "nav" [("/about/", "About")] (map (\(l, h) -> (h, l)) (navItems sp))
+            Left _ -> assertBool "expected success" False
+
+darkThemeAttributeSelectors :: TestTree
+darkThemeAttributeSelectors =
+    testCase "the CSS supports an explicit data-theme override" $ do
+        let css = renderCss ariaPreset emptyFonts []
+        assertBool "dark attribute" ("html[data-theme=\"dark\"]" `textIn` css)
+        assertBool "light attribute" ("html[data-theme=\"light\"]" `textIn` css)
+
+themeToggleScriptInjected :: TestTree
+themeToggleScriptInjected =
+    testCase "every page carries the theme toggle script" $ do
+        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        assertBool "script" ("burogu-theme" `textIn` page)
+        assertBool "footer target" ("site-footer" `textIn` page)
 
 formatDryRunDoesNotWrite :: TestTree
 formatDryRunDoesNotWrite =
@@ -498,7 +593,7 @@ mathjaxInlineMath =
             assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
             assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
             assertBool "post marked as having math" (postHasMath post)
-            let page = renderHtml (renderPost testConfig [] post)
+            let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
             assertBool "script injected in page" ("<script" `textIn` page)
             assertBool "mathjax URL" ("mathjax" `textIn` page)
 
@@ -509,8 +604,9 @@ mathjaxNoMathNoScript =
         assertRight result $ \post -> do
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             assertBool "not marked as having math" (not (postHasMath post))
-            let page = renderHtml (renderPost testConfig [] post)
-            assertBool "no script in page" ("<script" `notTextIn` page)
+            let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            assertBool "no math script in page" ("katex.min.js" `notTextIn` page)
+            assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
 plainMathNoScript :: TestTree
 plainMathNoScript =
@@ -520,7 +616,9 @@ plainMathNoScript =
             assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
-            assertBool "no script in page" ("<script" `notTextIn` renderHtml (renderPost noMathConfig [] post))
+                page = renderHtml (renderPost noMathConfig [] (Nothing, Nothing) post)
+            assertBool "no katex in page" ("katex.min.js" `notTextIn` page)
+            assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
 mathMethodMapping :: TestTree
 mathMethodMapping =
@@ -626,7 +724,7 @@ searchInputFocusStyled =
 viewportFitCover :: TestTree
 viewportFitCover =
     testCase "viewport meta opts into full-screen safe areas" $ do
-        let page = renderHtml (renderIndex testConfig [] [])
+        let page = renderHtml (renderIndex testConfig [] Nothing [])
         assertBool "viewport-fit=cover" ("viewport-fit=cover" `textIn` page)
 
 cssExtraCssAppended :: TestTree
@@ -755,13 +853,13 @@ fontsFromJson =
 siteNameClass :: TestTree
 siteNameClass =
     testCase "site name link carries the site-name class" $ do
-        let page = renderHtml (renderIndex testConfig [] [])
+        let page = renderHtml (renderIndex testConfig [] Nothing [])
         assertBool "site-name" ("class=\"site-name\"" `textIn` page)
 
 tagSeparatorSpan :: TestTree
 tagSeparatorSpan =
     testCase "tag separators are styled spans" $ do
-        let page = renderHtml (renderPost testConfig [] (postWithTags ["essay", "life"]))
+        let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags ["essay", "life"]))
         assertBool "separator span" ("<span class=\"post-tag-sep\"> · </span>" `textIn` page)
 
 tagCountHook :: TestTree
@@ -848,9 +946,9 @@ extraJsInjected :: TestTree
 extraJsInjected =
     testCase "extra JS files are injected as deferred scripts on every page" $ do
         let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
-        let page = renderHtml (renderIndex jsConfig [] [])
+        let page = renderHtml (renderIndex jsConfig [] Nothing [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
-        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] []))
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] Nothing []))
 
 serverParsePath :: TestTree
 serverParsePath =
@@ -911,31 +1009,31 @@ customPageHasMath =
 aboutNavShown :: TestTree
 aboutNavShown =
     testCase "about link appears in the nav when present" $ do
-        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] [])
+        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] Nothing [])
         assertBool "nav link" ("href=\"/about/\">About Me" `textIn` page)
 
 aboutNavHidden :: TestTree
 aboutNavHidden =
     testCase "no about link without an about page" $ do
-        let page = renderHtml (renderIndex testConfig [] [])
+        let page = renderHtml (renderIndex testConfig [] Nothing [])
         assertBool "no link" ("/about/" `notTextIn` page)
 
 copyrightCustom :: TestTree
 copyrightCustom =
     testCase "footer uses the configurable copyright" $ do
-        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [])
+        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] Nothing [])
         assertBool "custom copyright" ("自定义版权" `textIn` page)
 
 footerCreditShown :: TestTree
 footerCreditShown =
     testCase "footer shows the configured generator credit on the same line" $ do
-        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [])
+        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] Nothing [])
         assertBool "joined line" ("© moe li · Generated with Burogu" `textIn` page)
 
 footerCreditHidden :: TestTree
 footerCreditHidden =
     testCase "footer omits the generator credit when unset" $ do
-        let page = renderHtml (renderIndex testConfig [] [])
+        let page = renderHtml (renderIndex testConfig [] Nothing [])
         assertBool "no credit text" ("site-credit" `notTextIn` page)
 
 loadPagesFromDir :: TestTree
@@ -971,7 +1069,7 @@ loadPagesErrorAggregation =
 navMultiplePages :: TestTree
 navMultiplePages =
     testCase "nav renders multiple pages in order" $ do
-        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] [])
+        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] Nothing [])
         assertBool "about link" ("href=\"/about/\">About" `textIn` page)
         assertBool "projects link" ("href=\"/projects/\">Projects" `textIn` page)
         let aboutPos = findSubstring "href=\"/about/\"" page
@@ -1387,7 +1485,7 @@ escapedPost =
 ogMetaOnPost :: TestTree
 ogMetaOnPost =
     testCase "post pages carry article OG metadata" $ do
-        let html = renderHtml (renderPost testConfig [] (postWithTags ["essay"]))
+        let html = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags ["essay"]))
         assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
         assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
@@ -1395,21 +1493,21 @@ ogMetaOnPost =
 ogTypeWebsiteOnIndex :: TestTree
 ogTypeWebsiteOnIndex =
     testCase "index pages carry website OG metadata" $ do
-        let html = renderHtml (renderIndex testConfig [] [postWithTags ["essay"]])
+        let html = renderHtml (renderIndex testConfig [] Nothing [postWithTags ["essay"]])
         assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
 
 ogUrlAbsentWithoutBaseUrl :: TestTree
 ogUrlAbsentWithoutBaseUrl =
     testCase "og:url is omitted without baseUrl" $ do
-        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] [])
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] Nothing [])
         assertBool "no og:url" ("og:url" `notTextIn` html)
         assertBool "og:title still present" ("og:title" `textIn` html)
 
 ogDescriptionFallsBack :: TestTree
 ogDescriptionFallsBack =
     testCase "og:description falls back to siteDescription" $ do
-        let html = renderHtml (renderPost testConfig [] (postWithTags []))
+        let html = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags []))
         assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
 
 renderHtml :: L.Html () -> Text
@@ -1451,6 +1549,8 @@ postWithTags tags =
         , postTags = tags
         , postDescription = Nothing
         , postDraft = False
+        , postShowToc = False
+        , postToc = []
         , postBodyHtml = ""
         , postText = ""
         , postHasMath = False

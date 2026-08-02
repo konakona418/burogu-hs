@@ -45,7 +45,8 @@ VPS, GitHub Pages, a static host).
 - Posts are dated, taggable articles; pages are standalone documents
   listed in the navigation.
 - Every page ships a light and a dark color scheme; the visitor's
-  system preference picks the one that is used.
+  system preference picks the one that is used, and a button in the
+  footer overrides it (stored per visitor).
 - `preview` and `watch --serve` run a local HTTP server for instant
   iteration.
 - A site-wide search page is built in (see SEARCH below); a yearly
@@ -351,11 +352,14 @@ Posts live in `src/_post/*.md` with YAML frontmatter:
 `description`  short summary (used in the home page list, the feed
                and og:description)
 `draft`        `true` hides the post and allows a missing date
+`toc`          `true` renders a table of contents for the post
 
 A post's URL is `/posts/slug/`. Tags link to the tag archive, and
 posts with the same tag must use the same spelling (a warning is
 printed for tags differing only in case). Math (with `theme.math`) is
-detected automatically per post.
+detected automatically per post. The meta line shows an estimated
+reading time, and the bottom of the page links the previous and next
+posts.
 
 ### Pages
 
@@ -377,7 +381,7 @@ else is a build error. A target equal to the page's own slug URL is
 ignored.
 
 The special pages (redirectAs = one of `/tags/`, `/archive/`,
-`/search/`, `/404.html`) get generated content instead of the
+`/search/`, `/404.html`, `/`) get generated content instead of the
 markdown body:
 
 - `/tags/` - the tag index (every tag with a link to its archive)
@@ -385,6 +389,8 @@ markdown body:
 - `/search/` - the client-side search page (see SEARCH)
 - `/404.html` - served by the preview server (and any static host)
   for missing pages; **its body is your own markdown**
+- `/` - the home page: its content is rendered above the post list
+  (which gets a section title); the page is not in the navigation
 
 Every page type (normal, redirect stub, special) appears in the
 navigation by default, 404 included; `hiddenInNavbar: true` hides

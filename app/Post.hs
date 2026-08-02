@@ -1,4 +1,4 @@
-module Post (Post (..), loadPosts, mathMethod, parsePost, warnCaseTags) where
+module Post (Post (..), TocEntry (..), loadPosts, mathMethod, parsePost, warnCaseTags) where
 
 import Data.Char (isDigit)
 import Data.List (nub, sortOn)
@@ -12,10 +12,11 @@ import Pandoc (docHasMath, readerOpts, writerOpts)
 import System.Directory (listDirectory)
 import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
-import Text.Pandoc.Definition (MetaValue (..), Pandoc (..), lookupMeta)
+import Text.Pandoc.Definition (Block (Header), MetaValue (..), Pandoc (..), lookupMeta)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultKaTeXURL, defaultMathJaxURL)
 import Text.Pandoc.Readers.Markdown (readMarkdown)
 import Text.Pandoc.Shared (stringify)
+import Text.Pandoc.Walk (query)
 import Text.Pandoc.Writers.HTML (writeHtml5String)
 
 data Post = Post
@@ -28,6 +29,15 @@ data Post = Post
     , postBodyHtml :: Text
     , postText :: Text
     , postHasMath :: Bool
+    , postShowToc :: Bool
+    , postToc :: [TocEntry]
+    }
+    deriving (Eq, Show)
+
+data TocEntry = TocEntry
+    { tocLevel :: Int
+    , tocTitle :: Text
+    , tocId :: Text
     }
     deriving (Eq, Show)
 
@@ -39,6 +49,8 @@ data PostFields = PostFields
     , pfDescription :: Maybe Text
     , pfDraft :: Bool
     , pfHasMath :: Bool
+    , pfShowToc :: Bool
+    , pfToc :: [TocEntry]
     }
 
 mathMethod :: Text -> Maybe Text -> HTMLMathMethod
@@ -115,7 +127,11 @@ extractMeta name (Pandoc meta body) = do
         Just value -> case metaText value of
             Just t -> Right (Just t)
             Nothing -> Left "field 'description' must be a string"
-    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft, pfHasMath = hasMath}
+    showToc <- case lookupMeta "toc" meta of
+        Nothing -> Right False
+        Just (MetaBool b) -> Right b
+        Just _ -> Left "field 'toc' must be a boolean (true or false)"
+    pure PostFields{pfSlug = slug, pfTitle = title, pfDate = date, pfTags = validTags, pfDescription = description, pfDraft = draft, pfHasMath = hasMath, pfShowToc = showToc, pfToc = tocOf body}
 
 mkPost :: PostFields -> Text -> Text -> Post
 mkPost fields text body =
@@ -129,6 +145,8 @@ mkPost fields text body =
         , postBodyHtml = body
         , postText = text
         , postHasMath = pfHasMath fields
+        , postShowToc = pfShowToc fields
+        , postToc = pfToc fields
         }
 
 sortPosts :: [Post] -> [Post]
@@ -155,6 +173,17 @@ metaText :: MetaValue -> Maybe Text
 metaText (MetaString t) = Just t
 metaText (MetaInlines inlines) = Just (stringify inlines)
 metaText _ = Nothing
+
+{- | The heading structure of the body: (level, title, id) for every
+Header, in document order. Ids come from the gfm_auto_identifiers
+reader extension.
+-}
+tocOf :: [Block] -> [TocEntry]
+tocOf body = query headerEntry body
+  where
+    headerEntry :: Block -> [TocEntry]
+    headerEntry (Header level (ident, _, _) inlines) = [TocEntry level (stringify inlines) ident]
+    headerEntry _ = []
 
 -- | Plain text of the document body, excluding the frontmatter meta.
 bodyText :: Pandoc -> Text
