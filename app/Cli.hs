@@ -44,16 +44,16 @@ commands :: Mod CommandFields Command
 commands =
     command "build" (info (Build <$> pathsParser) (progDesc "Build the site"))
         <> command "clean" (info (Clean <$> outParser) (progDesc "Remove the output directory"))
-        <> command "preview" (info (Preview <$> portParser) (progDesc "Build once, then serve the site locally"))
-        <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild when sources change, optionally serve"))
+        <> command "preview" (info (Preview <$> portParser) (progDesc "Build once, then serve the site"))
+        <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild on change, optionally serve"))
         <> command "init" (info (Init <$> dirParser) (progDesc "Initialize an src/ tree"))
-        <> command "new" (info (New <$> slugParser) (progDesc "Create a new post (dated with today's date)"))
-        <> command "draft" (info (Draft <$> slugParser) (progDesc "Create a draft (draft: true, not published)"))
-        <> command "publish" (info (Publish <$> slugParser) (progDesc "Publish a draft (adds the date, removes the draft flag)"))
-        <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
-        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
-        <> command "format" (info (Format <$> dryRunParser <*> pathsParser) (progDesc "Normalize config.yaml, posts and pages (frontmatter defaults, canonical order)"))
-        <> command "doc" (info (Doc <$> sectionParser <*> langParser <*> colorParser) (progDesc "Print the man-style manual (en/zh, sections, ANSI styling)"))
+        <> command "new" (info (New <$> slugParser) (progDesc "Create a post"))
+        <> command "draft" (info (Draft <$> slugParser) (progDesc "Create a draft"))
+        <> command "publish" (info (Publish <$> slugParser) (progDesc "Publish a draft"))
+        <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site"))
+        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a git remote"))
+        <> command "format" (info (Format <$> dryRunParser <*> pathsParser) (progDesc "Normalize config, posts and pages"))
+        <> command "doc" (info (Doc <$> sectionParser <*> langParser <*> colorParser) (progDesc "Print the manual"))
 
 pathsParser :: Parser Paths
 pathsParser =
@@ -63,14 +63,14 @@ pathsParser =
                 <> metavar "PATH"
                 <> value "config.yaml"
                 <> showDefault
-                <> help "Path to the site configuration file"
+                <> help "Site configuration file"
             )
         <*> strOption
             ( long "src"
                 <> metavar "DIR"
                 <> value "src"
                 <> showDefault
-                <> help "Source directory (posts live in DIR/_post)"
+                <> help "Source directory"
             )
         <*> strOption
             ( long "out"
@@ -108,7 +108,7 @@ serveParser =
             auto
             ( long "serve"
                 <> metavar "PORT"
-                <> help "Also serve the site on this port"
+                <> help "Also serve on this port"
             )
         )
 
@@ -117,17 +117,17 @@ dirParser =
     strArgument
         ( metavar "DIR"
             <> value "src"
-            <> help "Target directory (default: src)"
+            <> help "Target directory"
         )
 
 slugParser :: Parser Text
-slugParser = strArgument (metavar "SLUG" <> help "Post slug (used in the filename and URL)")
+slugParser = strArgument (metavar "SLUG" <> help "Post slug")
 
 clearCacheParser :: Parser Bool
-clearCacheParser = switch (long "clear-cache" <> help "Remove the persistent git cache (next deploy re-fetches from scratch)")
+clearCacheParser = switch (long "clear-cache" <> help "Clear the git deploy cache")
 
 dryRunParser :: Parser Bool
-dryRunParser = switch (long "dry-run" <> help "Show what would change without writing anything")
+dryRunParser = switch (long "dry-run" <> help "Show changes without writing")
 
 actionParser :: Parser Text
 actionParser = strArgument (metavar "ACTION" <> help "push or pull")
@@ -137,7 +137,7 @@ repoParser =
     optional
         ( strArgument
             ( metavar "REPO"
-                <> help "git repo URL (defaults to srcRepo in config.yaml)"
+                <> help "Git repository URL"
             )
         )
 
@@ -146,7 +146,7 @@ sectionParser =
     optional
         ( strArgument
             ( metavar "SECTION"
-                <> help "Manual section to print (default: the whole manual)"
+                <> help "Manual section"
             )
         )
 
@@ -156,7 +156,7 @@ langParser =
         ( strOption
             ( long "lang"
                 <> metavar "LANG"
-                <> help "Manual language: en or zh (default: follow the locale)"
+                <> help "Manual language"
             )
         )
 
@@ -166,7 +166,7 @@ colorParser =
         ( strOption
             ( long "color"
                 <> metavar "MODE"
-                <> help "ANSI styling: auto, always or never (default: auto)"
+                <> help "ANSI styling"
             )
         )
 
