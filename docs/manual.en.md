@@ -367,7 +367,8 @@ Pages live in `src/_pages/*.md`; each becomes `/slug/` and is listed
 in the navigation:
 
 `title`            navigation label and page title
-`priority`         navigation position, lower first (default: 100)
+`priority`         navigation position, lower first (default: 100;
+                   negative values pin the page to the top)
 `hiddenInNavbar`   `true` keeps the page out of the navigation (it
                    stays reachable at /slug/)
 `redirectAs`       redirect this page: declare a special page, or
