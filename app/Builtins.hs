@@ -46,6 +46,21 @@ builtins =
     , ("take", b2 "take" takeOf)
     , ("drop", b2 "drop" dropOf)
     , ("formatDate", b2 "formatDate" formatDateOf)
+    , ("el", b3 "el" elOf)
+    , ("esc", b1 "esc" escOf)
+    , ("h1", b1 "h1" (tagOf "h1"))
+    , ("h2", b1 "h2" (tagOf "h2"))
+    , ("p", b1 "p" (tagOf "p"))
+    , ("div", b1 "div" (tagOf "div"))
+    , ("span", b1 "span" (tagOf "span"))
+    , ("strong", b1 "strong" (tagOf "strong"))
+    , ("em", b1 "em" (tagOf "em"))
+    , ("time", b1 "time" (tagOf "time"))
+    , ("ul", b1 "ul" (tagOf "ul"))
+    , ("ol", b1 "ol" (tagOf "ol"))
+    , ("li", b1 "li" (tagOf "li"))
+    , ("a", b2 "a" aOf)
+    , ("img", b2 "img" imgOf)
     ]
 
 ok :: Value -> Either LangError (Value, [Text])
@@ -275,6 +290,71 @@ formatWith fmt day = go (T.unpack fmt)
     longMonth = T.pack (formatTime defaultTimeLocale "%B" day)
     shortWeek = T.pack (formatTime defaultTimeLocale "%a" day)
     longWeek = T.pack (formatTime defaultTimeLocale "%A" day)
+
+-- | Escape `& < > " '` as HTML entities.
+escOf :: Value -> Either LangError Value
+escOf v = case v of
+    VStr t -> Right (VStr (escapeHtml t))
+    _ -> typeErr "esc" ("string" <> ", got " <> showValue v)
+
+{- | Any tag: `el(name, attrs, content)`. Attributes: map keys and
+values are escaped, `true` renders a bare attribute, `false`/`nil`
+omits it, keys are in alphabetical order. Void elements (br, hr,
+img, input, meta, link, source) render without a closing tag.
+Content is inserted as-is.
+-}
+elOf :: Value -> Value -> Value -> Either LangError (Value, [Text])
+elOf n a c = case (n, a, c) of
+    (VStr name, VMap attrs, VStr content) -> do
+        attrsHtml <- T.concat <$> mapM renderAttr (Map.toList attrs)
+        ok (VStr ("<" <> name <> attrsHtml <> ">" <> if isVoid name then "" else content <> "</" <> name <> ">"))
+    _ -> typeErr "el" ("tag name, attribute map and string content" <> ", got " <> showValue n <> ", " <> showValue a <> " and " <> showValue c)
+  where
+    renderAttr :: (Text, Value) -> Either LangError Text
+    renderAttr (k, v) = case v of
+        VBool True -> Right (" " <> k)
+        VBool False -> Right ""
+        VNil -> Right ""
+        _ -> do
+            t <- either (Left . msg) Right (strOf v)
+            Right (" " <> k <> "=\"" <> escapeHtml t <> "\"")
+
+    isVoid :: Text -> Bool
+    isVoid name = name `elem` ["br", "hr", "img", "input", "meta", "link", "source"]
+
+-- | A content-only tag: `name(content)`.
+tagOf :: Text -> Value -> Either LangError Value
+tagOf name c = case c of
+    VStr content -> Right (VStr ("<" <> name <> ">" <> content <> "</" <> name <> ">"))
+    _ -> typeErr name ("string content" <> ", got " <> showValue c)
+
+-- | `a(content, href)`: an anchor with an escaped href.
+aOf :: Value -> Value -> Either LangError (Value, [Text])
+aOf c href = case (c, href) of
+    (VStr content, VStr h) -> ok (VStr ("<a href=\"" <> escapeHtml h <> "\">" <> content <> "</a>"))
+    _ -> typeErr "a" ("string content and string href" <> ", got " <> showValue c <> " and " <> showValue href)
+
+-- | `img(src, alt)`: a void image tag; `nil` omits the alt attribute.
+imgOf :: Value -> Value -> Either LangError (Value, [Text])
+imgOf s alt = case s of
+    VStr src -> do
+        altHtml <- case alt of
+            VNil -> Right ""
+            VStr a -> Right (" alt=\"" <> escapeHtml a <> "\"")
+            _ -> typeErr "img" ("string src and string or nil alt" <> ", got " <> showValue s <> " and " <> showValue alt)
+        ok (VStr ("<img src=\"" <> escapeHtml src <> "\"" <> altHtml <> ">"))
+    _ -> typeErr "img" ("string src and string or nil alt" <> ", got " <> showValue s <> " and " <> showValue alt)
+
+escapeHtml :: Text -> Text
+escapeHtml = T.concatMap escape
+  where
+    escape c = case c of
+        '&' -> "&amp;"
+        '<' -> "&lt;"
+        '>' -> "&gt;"
+        '"' -> "&quot;"
+        '\'' -> "&#39;"
+        _ -> T.singleton c
 
 typeErr :: Text -> Text -> Either LangError a
 typeErr name want = Left (msg ("cannot " <> name <> ": expected " <> want))

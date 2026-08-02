@@ -1937,6 +1937,19 @@ dslBuiltins =
         assertEqual "formatDate literal" (Right "\"50%\"") (runLang "formatDate(\"2026-08-02\", \"50%%\")")
         assertEqual "formatDate bad date" (Left "invalid date '2026-13-40' [\"formatDate\"]") (runLangErr "formatDate(\"2026-13-40\", \"%Y\")")
         assertEqual "formatDate bad fmt" (Left "unsupported format directive '%H' [\"formatDate\"]") (runLangErr "formatDate(\"2026-08-02\", \"%H\")")
+        assertEqual "el basic" (Right "\"<div class=\"x\">hi</div>\"") (runLang "el(\"div\", {\"class\" => \"x\"}, \"hi\")")
+        assertEqual "el attr order" (Right "\"<a class=\"n\" href=\"/a/\">x</a>\"") (runLang "el(\"a\", {\"href\" => \"/a/\", \"class\" => \"n\"}, \"x\")")
+        assertEqual "el bare attr" (Right "\"<input checked>\"") (runLang "el(\"input\", {\"checked\" => true}, \"\")")
+        assertEqual "el omit attr" (Right "\"<div>hi</div>\"") (runLang "el(\"div\", {\"x\" => false, \"y\" => nil}, \"hi\")")
+        assertEqual "el void" (Right "\"<br>\"") (runLang "el(\"br\", {}, \"\")")
+        assertEqual "el attr escaped" (Right "\"<a href=\"/a?x=1&amp;y=2\">t</a>\"") (runLang "el(\"a\", {\"href\" => \"/a?x=1&y=2\"}, \"t\")")
+        assertEqual "esc" (Right "\"a&amp;&lt;b&gt;c&#39;\"") (runLang "esc(\"a&<b>c'\")")
+        assertEqual "p component" (Right "\"<p>hi</p>\"") (runLang "p(\"hi\")")
+        assertEqual "ul li nested" (Right "\"<ul><li>a</li><li>b</li></ul>\"") (runLang "ul(li(\"a\") + li(\"b\"))")
+        assertEqual "a helper" (Right "\"<a href=\"/x/\">Go</a>\"") (runLang "a(\"Go\", \"/x/\")")
+        assertEqual "img helper" (Right "\"<img src=\"/i.png\" alt=\"pic\">\"") (runLang "img(\"/i.png\", \"pic\")")
+        assertEqual "img no alt" (Right "\"<img src=\"/i.png\">\"") (runLang "img(\"/i.png\", nil)")
+        assertEqual "esc in content" (Right "\"<p>A &amp; B</p>\"") (runLang "p(esc(\"A & B\"))")
 
 dslPutsOutput :: TestTree
 dslPutsOutput =
