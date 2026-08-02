@@ -405,6 +405,85 @@ site/                生成出力（生成のたびに作り直される）
 ページ、404 も含む）はデフォルトでナビゲーションに表示され、
 `hiddenInNavbar: true` で任意のものを非表示にできます。
 
+### Scripts スクリプト
+
+ページは markdown の代わりにスクリプトで生成できます。frontmatter
+に `script:` フィールドを追加します。そのファイル（`src/_scripts/`
+からの相対パス）はビルド時に評価され、文字列の結果がページ本文
+（raw HTML）になります。markdown 本文は無視されます。
+
+`script`   スクリプトファイル（`src/_scripts/` 配下）、例: `hello.d`
+
+スクリプトはサイトコンテキストを束縛した状態で実行されます:
+
+`site`     サイト設定: siteName、siteAuthor、siteDescription、
+           siteLang、siteCopyright、baseUrl、siteGeneratedBy
+`posts`    全記事: title、date、tags、url、draft、text、
+           description
+`pages`    カスタムページ: slug、url、title、redirectAs
+`tags`     全タグと投稿数: name、count
+`config`   生の設定: theme（preset、math、mathUrl、extraCss、
+           extraJs）、srcRepo
+
+`puts(...)` はビルド中に引数を stderr へ出力します。スクリプトの
+エラー（構文・実行時）は他のページエラーと同様にビルドを失敗させ、
+出力ディレクトリは変更されません。
+
+#### スクリプト言語
+
+小さな Ruby 風、動的型付け、純計算の言語です。関数呼び出しは
+`f(a, b)` の一通りだけです。単独の `f` は関数値そのものです。
+すべてが式であり、プログラム・`def` 本体・ラムダ本体は隣接する
+式の列で、値は最後の式です。
+
+リテラル: `42`、`1.5`、`"text #{expr}"`（補間、ネスト可）、
+`true`、`false`、`nil`、`[1, 2]`、`{"a" => 1}`。ラムダ:
+`{ x, y -> expr ... }`。定義: `def f(a, b) expr ... end`
+（トップレベルの `def` は順序に関係なく相互参照できます）。
+条件: `if cond then expr else expr end`（`else` は省略可）。
+演算子: `+ - * / % == != < > <= >= && || !`、単項マイナス。
+偽になるのは `false` と `nil` だけです。ループも代入もありません。
+再帰と `map`/`filter` を使います。
+
+組み込み関数:
+
+    len(x)          文字列・配列・マップの長さ
+    at(x, i)        配列・文字列のインデックス i の要素
+    get(m, k)       マップのキー k の値（無ければ nil）
+    append(a, v)    配列 a に v を追加したコピー
+    concat(a, b)    配列・文字列の連結
+    join(a, sep)    配列を文字列に結合
+    split(s, sep)   文字列を区切り文字で分割
+    map(a, f)       各要素に f を適用した配列
+    filter(a, f)    f が真の要素だけの配列
+    sort(a)         数値・文字列の配列をソート
+    reverse(a)      配列を反転
+    first(a)        最初の要素（空なら nil）
+    last(a)         最後の要素（空なら nil）
+    keys(m)         マップのキー
+    values(m)       マップの値
+    contains(a, x)  部分文字列・要素の包含判定
+    trim(s)         前後の空白を除いた文字列
+    lower(s)        小文字の文字列
+    upper(s)        大文字の文字列
+    replace(s, f, t) 文字列中の f を t に置換
+    take(a, n)      先頭 n 個の要素（または文字）
+    drop(a, n)      先頭 n 個を除いた要素（または文字）
+    toStr(v)        数値・真偽値・nil・文字列を文字列化
+    puts(...)       引数を stderr に出力（nil を返す）
+
+#### 例
+
+    # src/_scripts/hello.d
+    "<h2>Hello #{get(site, "siteName")}!</h2>"
+      + join(map(posts, { p -> "<li>" + get(p, "title") + "</li>" }), "")
+
+    # src/_pages/hello.md
+    ---
+    title: Hello
+    script: hello.d
+    ---
+
 ### 静的ファイルとビルトイン出力
 
 `src/` 配下のその他のファイル（画像、CNAME、favicon、フォント…）

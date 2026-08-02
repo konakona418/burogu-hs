@@ -358,6 +358,81 @@ URL）開頭，其餘格式是建置錯誤；目標等於本頁自己的 slug UR
 所有頁面類型（普通頁、重新導向 stub、特殊頁，404 也不例外）預設
 都出現在導覽列裡；`hiddenInNavbar: true` 可隱藏其中任意一個。
 
+### Scripts 腳本
+
+頁面可以用腳本產生，取代 markdown。在 frontmatter 加入 `script:`
+欄位；該檔案（相對 `src/_scripts/`）在建置時求值，其字串結果就是
+頁面內文（raw HTML）。markdown 內文被忽略。
+
+`script`   腳本檔案，位於 `src/_scripts/`，如 `hello.d`
+
+腳本求值時注入站台上下文：
+
+`site`     站台設定：siteName、siteAuthor、siteDescription、
+           siteLang、siteCopyright、baseUrl、siteGeneratedBy
+`posts`    全部文章：title、date、tags、url、draft、text、
+           description
+`pages`    自訂頁面：slug、url、title、redirectAs
+`tags`     全部標籤及其文章數：name、count
+`config`   原始設定：theme（preset、math、mathUrl、extraCss、
+           extraJs）、srcRepo
+
+`puts(...)` 在建置時把參數印到 stderr。腳本的任何錯誤（語法或
+執行期）都像其他頁面錯誤一樣使建置失敗，輸出目錄保持不變。
+
+#### 腳本語言
+
+一門微型 Ruby 風格、動態型別、純計算的語言。函式呼叫只有一種
+寫法：`f(a, b)`；單獨的 `f` 只是函式值。一切皆運算式；程式、
+`def` 本體和 lambda 本體都是相鄰運算式序列，序列的值是最後一個。
+
+字面值：`42`、`1.5`、`"text #{expr}"`（插值，可巢狀字串）、
+`true`、`false`、`nil`、`[1, 2]`、`{"a" => 1}`。lambda：
+`{ x, y -> expr ... }`。定義：`def f(a, b) expr ... end`
+（頂層 `def` 彼此可見，與順序無關）。條件：`if cond then expr
+else expr end`（`else` 分支可省）。運算子：`+ - * / % == != <
+> <= >= && || !`、一元負號。只有 `false` 和 `nil` 為假。沒有
+迴圈也沒有指派；用遞迴和 `map`/`filter`。
+
+內建函式：
+
+    len(x)          字串/陣列/映射的長度
+    at(x, i)        陣列或字串下標 i 的元素
+    get(m, k)       映射中鍵 k 的值（缺失回傳 nil）
+    append(a, v)    陣列 a 追加 v 的副本
+    concat(a, b)    陣列或字串串接
+    join(a, sep)    陣列拼成字串
+    split(s, sep)   字串依分隔符拆成陣列
+    map(a, f)       對每個元素套用 f 的陣列
+    filter(a, f)    f 為真的元素組成的陣列
+    sort(a)         數字或字串陣列排序
+    reverse(a)      反轉陣列
+    first(a)        第一個元素（空回傳 nil）
+    last(a)         最後一個元素（空回傳 nil）
+    keys(m)         映射的鍵
+    values(m)       映射的值
+    contains(a, x)  子字串或元素包含判斷
+    trim(s)         去掉前後空白的字串
+    lower(s)        小寫字串
+    upper(s)        大寫字串
+    replace(s, f, t) 字串中 f 取代為 t
+    take(a, n)      前 n 個元素（或字元）
+    drop(a, n)      去掉前 n 個元素（或字元）
+    toStr(v)        數字/布林/nil/字串轉字串
+    puts(...)       印出參數到 stderr（回傳 nil）
+
+#### 範例
+
+    # src/_scripts/hello.d
+    "<h2>Hello #{get(site, "siteName")}!</h2>"
+      + join(map(posts, { p -> "<li>" + get(p, "title") + "</li>" }), "")
+
+    # src/_pages/hello.md
+    ---
+    title: Hello
+    script: hello.d
+    ---
+
 ### 靜態檔案與內建產物
 
 `src/` 下其餘所有檔案（圖片、CNAME、favicon、字型……）原樣複製

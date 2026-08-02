@@ -356,6 +356,81 @@ site/                构建输出（每次构建重新生成）
 所有页面类型（普通页、重定向 stub、特殊页，404 也不例外）默认
 都出现在导航里；`hiddenInNavbar: true` 可隐藏其中任意一个。
 
+### Scripts 脚本
+
+页面可以用脚本生成，替代 markdown。在 frontmatter 里加 `script:`
+字段；该文件（相对 `src/_scripts/`）在构建时求值，其字符串结果
+就是页面正文（raw HTML）。markdown 正文被忽略。
+
+`script`   脚本文件，位于 `src/_scripts/`，如 `hello.d`
+
+脚本求值时注入站点上下文：
+
+`site`     站点配置：siteName、siteAuthor、siteDescription、
+           siteLang、siteCopyright、baseUrl、siteGeneratedBy
+`posts`    全部文章：title、date、tags、url、draft、text、
+           description
+`pages`    自定义页面：slug、url、title、redirectAs
+`tags`     全部标签及其文章数：name、count
+`config`   原始配置：theme（preset、math、mathUrl、extraCss、
+           extraJs）、srcRepo
+
+`puts(...)` 在构建时把参数打印到 stderr。脚本的任何错误（语法或
+运行时）都像其他页面错误一样使构建失败，输出目录保持不变。
+
+#### 脚本语言
+
+一门微型 Ruby 风格、动态类型、纯计算的语言。函数调用只有一种
+写法：`f(a, b)`；单独的 `f` 只是函数值。一切皆表达式；程序、
+`def` 体和 lambda 体都是相邻表达式序列，序列的值是最后一个。
+
+字面量：`42`、`1.5`、`"text #{expr}"`（插值，可嵌套字符串）、
+`true`、`false`、`nil`、`[1, 2]`、`{"a" => 1}`。lambda：
+`{ x, y -> expr ... }`。定义：`def f(a, b) expr ... end`
+（顶层 `def` 互相可见，与顺序无关）。条件：`if cond then expr
+else expr end`（`else` 分支可省）。运算符：`+ - * / % == != <
+> <= >= && || !`、一元负号。只有 `false` 和 `nil` 为假。没有
+循环也没有赋值；用递归和 `map`/`filter`。
+
+内置函数：
+
+    len(x)          字符串/数组/映射的长度
+    at(x, i)        数组或字符串下标 i 的元素
+    get(m, k)       映射中键 k 的值（缺失返回 nil）
+    append(a, v)    数组 a 追加 v 的副本
+    concat(a, b)    数组或字符串拼接
+    join(a, sep)    数组拼成字符串
+    split(s, sep)   字符串按分隔符拆成数组
+    map(a, f)       对每个元素应用 f 的数组
+    filter(a, f)    f 为真的元素组成的数组
+    sort(a)         数字或字符串数组排序
+    reverse(a)      反转数组
+    first(a)        第一个元素（空返回 nil）
+    last(a)         最后一个元素（空返回 nil）
+    keys(m)         映射的键
+    values(m)       映射的值
+    contains(a, x)  子串或元素包含判断
+    trim(s)         去掉首尾空白的字符串
+    lower(s)        小写字符串
+    upper(s)        大写字符串
+    replace(s, f, t) 字符串中 f 替换为 t
+    take(a, n)      前 n 个元素（或字符）
+    drop(a, n)      去掉前 n 个元素（或字符）
+    toStr(v)        数字/布尔/nil/字符串转字符串
+    puts(...)       打印参数到 stderr（返回 nil）
+
+#### 示例
+
+    # src/_scripts/hello.d
+    "<h2>Hello #{get(site, "siteName")}!</h2>"
+      + join(map(posts, { p -> "<li>" + get(p, "title") + "</li>" }), "")
+
+    # src/_pages/hello.md
+    ---
+    title: Hello
+    script: hello.d
+    ---
+
 ### 静态文件与内置产物
 
 `src/` 下其余所有文件（图片、CNAME、favicon、字体……）原样拷贝
