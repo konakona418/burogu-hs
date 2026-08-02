@@ -179,7 +179,7 @@ renderPost cfg navPages neighbors post = layout cfg navPages pageMeta $ L.articl
         L.span_ [L.class_ "post-meta-time"] (L.toHtml (readingLabel cfg post))
     when (postShowToc post && not (null (postToc post))) (renderToc (postToc post))
     L.div_ [L.class_ "post-body"] (L.toHtmlRaw (postBodyHtml post))
-    renderPostNav neighbors
+    renderPostNav cfg neighbors
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = postTitle post, pmOgType = "article", pmOgPath = postUrl post, pmOgDescription = postDescription post, pmHasMath = postHasMath post}
@@ -190,19 +190,22 @@ renderToc entries = L.nav_ [L.class_ "toc"] $ L.ul_ $ mapM_ item entries
     item :: TocEntry -> L.Html ()
     item entry = L.li_ $ L.a_ [L.href_ ("#" <> tocId entry)] (L.toHtml (tocTitle entry))
 
-renderPostNav :: (Maybe Post, Maybe Post) -> L.Html ()
-renderPostNav (prev, next) = L.nav_ [L.class_ "post-nav"] $ L.ul_ $ do
-    maybe (pure ()) renderPrev prev
-    maybe (pure ()) renderNext next
+renderPostNav :: SiteConfig -> (Maybe Post, Maybe Post) -> L.Html ()
+renderPostNav cfg (prev, next) = case (prev, next) of
+    (Nothing, Nothing) -> pure ()
+    _ -> L.nav_ [L.class_ "post-nav"] $ do
+        maybe (pure ()) renderPrev prev
+        maybe (pure ()) renderNext next
   where
+    lang = fromSiteLang (siteLang cfg)
     renderPrev :: Post -> L.Html ()
-    renderPrev p = L.li_ [L.class_ "post-nav-prev"] $ do
-        L.span_ (L.toHtml ("← " :: Text))
+    renderPrev p = L.div_ [L.class_ "post-nav-prev"] $ do
+        L.span_ [L.class_ "post-nav-label"] (L.toHtml (t lang "prevPost"))
         L.a_ [L.href_ (postUrl p)] (L.toHtml (postTitle p))
     renderNext :: Post -> L.Html ()
-    renderNext p = L.li_ [L.class_ "post-nav-next"] $ do
+    renderNext p = L.div_ [L.class_ "post-nav-next"] $ do
+        L.span_ [L.class_ "post-nav-label"] (L.toHtml (t lang "nextPost"))
         L.a_ [L.href_ (postUrl p)] (L.toHtml (postTitle p))
-        L.span_ (L.toHtml (" →" :: Text))
 
 readingLabel :: SiteConfig -> Post -> Text
 readingLabel cfg post =

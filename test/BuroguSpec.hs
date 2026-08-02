@@ -183,6 +183,7 @@ tests =
         , renderPostTocHidden
         , readingTimeShown
         , postNavRendered
+        , postNavSingleSide
         , indexSpecialPageClassified
         , indexPageRenderedOnHome
         , indexPageExcludedFromNav
@@ -333,8 +334,26 @@ postNavRendered =
         let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
             newer = (postWithTags []){postSlug = "newer", postTitle = "Newer", postDate = "2026-03-01"}
             page = renderHtml (renderPost testConfig [] (Just newer, Just older) (postWithTags []))
+        assertBool "prev label" ("上一篇" `textIn` page)
+        assertBool "next label" ("下一篇" `textIn` page)
         assertBool "prev link" ("href=\"/posts/newer/\">Newer</a>" `textIn` page)
         assertBool "next link" ("href=\"/posts/older/\">Older</a>" `textIn` page)
+        assertBool "no arrows" ("←" `notTextIn` page && "→" `notTextIn` page)
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] (Just newer, Just older) (postWithTags []))
+        assertBool "en labels" ("Previous" `textIn` enPage && "Next" `textIn` enPage)
+
+postNavSingleSide :: TestTree
+postNavSingleSide =
+    testCase "one-sided nav renders without a dangling separator" $ do
+        let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
+        assertEqual "neither side" False ("post-nav" `textIn` renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags [])))
+        let onlyNext = renderHtml (renderPost testConfig [] (Nothing, Just older) (postWithTags []))
+        assertBool "next only" ("post-nav-next" `textIn` onlyNext)
+        assertBool "no prev" ("post-nav-prev" `notTextIn` onlyNext)
+        assertBool "pushed right" ("margin-left:auto" `notTextIn` onlyNext)
+        let css = renderCss ariaPreset emptyFonts []
+        assertBool "separator" (".post-nav" `textIn` css)
+        assertBool "push-right rule" (".post-nav-next" `textIn` css)
 
 i18nCompleteness :: TestTree
 i18nCompleteness =
@@ -408,6 +427,8 @@ darkThemeAttributeSelectors =
         assertBool "light attribute" ("html[data-theme=\"light\"]" `textIn` css)
         let declarations = [l | l <- T.lines css, "  --space-page-top" `T.isPrefixOf` l]
         assertEqual "layout tokens not duplicated" 2 (length declarations)
+        assertBool "structural lists unbulleted" (".post-list" `textIn` css && "list-style-type : none" `textIn` css)
+        assertBool "content lists default" ("blockquote" `textIn` css)
 
 themeToggleScriptInjected :: TestTree
 themeToggleScriptInjected =
@@ -879,6 +900,8 @@ shaftHarmonyRules =
         assertBool "mobile date column" ("min-width : 0" `textIn` css)
         assertBool "accent site name" ("color           : var(--color-accent)" `textIn` css)
         assertBool "serif everywhere" ("sans-serif" `notTextIn` css)
+        assertBool "print markers" ("::marker" `textIn` css)
+        assertBool "ink blockquote" ("blockquote" `textIn` css)
 
 fontsFromJson :: TestTree
 fontsFromJson =

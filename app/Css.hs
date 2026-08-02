@@ -215,6 +215,8 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
         "padding" C.-: "0"
         "border-right" C.-: "none"
         "margin-bottom" C.-: "4px"
+    (".post-nav" :: C.Selector) C.? C.flexDirection CF.column
+    (".post-nav-next" :: C.Selector) C.? ("margin-left" C.-: "0")
 
 listSpacing :: C.Css
 listSpacing = do
@@ -345,8 +347,15 @@ baseRules = do
         C.borderRadius (C.px 4) (C.px 4) (C.px 4) (C.px 4)
         C.overflowX C.scroll
     C.pre C.? C.code C.? ("background-color" C.-: "transparent")
-    C.ul C.? C.listStyleType C.none
+    (".post-list" :: C.Selector) C.? C.listStyleType C.none
+    (".tag-list" :: C.Selector) C.? C.listStyleType C.none
+    ("#search-results" :: C.Selector) C.? C.listStyleType C.none
+    (".toc > ul" :: C.Selector) C.? C.listStyleType C.none
     C.li C.? ("margin-bottom" C.-: "var(--space-list-gap)")
+    C.blockquote C.? do
+        "border-left" C.-: "3px solid var(--color-muted)"
+        "margin" C.-: "0 0 var(--space-list-gap)"
+        "padding-left" C.-: "calc(var(--space-list-gap) * 2)"
     C.nav C.? do
         C.display C.flex
         C.flexWrap CF.wrap
@@ -354,6 +363,19 @@ baseRules = do
         "gap" C.-: "var(--space-list-gap) var(--space-nav-link)"
         "margin-bottom" C.-: "var(--space-nav-gap)"
     (".post-desc" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
+    (".post-nav" :: C.Selector) C.? do
+        "border-top" C.-: "1px solid var(--color-muted)"
+        "padding-top" C.-: "calc(var(--space-list-gap) * 2)"
+        "margin-top" C.-: "var(--space-nav-gap)"
+        C.display C.flex
+        "justify-content" C.-: "space-between"
+        "gap" C.-: "0 var(--space-nav-gap)"
+    (".post-nav-next" :: C.Selector) C.? ("margin-left" C.-: "auto")
+    (".post-nav-label" :: C.Selector) C.? do
+        C.display C.block
+        "color" C.-: "var(--color-muted)"
+        "font-size" C.-: "0.85em"
+        "margin-bottom" C.-: "2px"
     C.a C.# ("aria-hidden" C.@= "true") C.? C.display C.none
     C.mark C.? do
         "background-color" C.-: "var(--color-mark)"

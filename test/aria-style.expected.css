@@ -225,7 +225,22 @@ pre code
   background-color : transparent;
 }
 
-ul
+.post-list
+{
+  list-style-type : none;
+}
+
+.tag-list
+{
+  list-style-type : none;
+}
+
+#search-results
+{
+  list-style-type : none;
+}
+
+.toc > ul
 {
   list-style-type : none;
 }
@@ -233,6 +248,13 @@ ul
 li
 {
   margin-bottom : var(--space-list-gap);
+}
+
+blockquote
+{
+  border-left  : 3px solid var(--color-muted);
+  margin       : 0 0 var(--space-list-gap);
+  padding-left : calc(var(--space-list-gap) * 2);
 }
 
 nav
@@ -247,6 +269,29 @@ nav
 .post-desc
 {
   color : var(--color-muted);
+}
+
+.post-nav
+{
+  border-top      : 1px solid var(--color-muted);
+  padding-top     : calc(var(--space-list-gap) * 2);
+  margin-top      : var(--space-nav-gap);
+  display         : flex;
+  justify-content : space-between;
+  gap             : 0 var(--space-nav-gap);
+}
+
+.post-nav-next
+{
+  margin-left : auto;
+}
+
+.post-nav-label
+{
+  display       : block;
+  color         : var(--color-muted);
+  font-size     : 0.85em;
+  margin-bottom : 2px;
 }
 
 a[aria-hidden='true']
@@ -570,6 +615,16 @@ nav
   padding       : 0;
   border-right  : none;
   margin-bottom : 4px;
+}
+
+.post-nav
+{
+  flex-direction : column;
+}
+
+.post-nav-next
+{
+  margin-left : 0;
 }
 
 }

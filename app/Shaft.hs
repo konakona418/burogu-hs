@@ -81,6 +81,8 @@ shaftRules = do
     sharpCorners
     selectionStyle
     mobileDate
+    printMarkers
+    blockquoteInk
 
 displayHeadings :: C.Css
 displayHeadings =
@@ -120,6 +122,10 @@ inkTitles = do
         "color" C.-: "var(--color-text)"
         C.textDecoration C.none
     (".post-item > a" :: C.Selector) C.# C.hover C.? ("color" C.-: "var(--color-accent)")
+    (".post-nav a" :: C.Selector) C.? do
+        "color" C.-: "var(--color-text)"
+        C.textDecoration C.none
+    (".post-nav a" :: C.Selector) C.# C.hover C.? ("color" C.-: "var(--color-accent)")
 
 postDate :: C.Css
 postDate =
@@ -204,3 +210,14 @@ selectionStyle =
 mobileDate :: C.Css
 mobileDate =
     C.query CM.screen [CM.maxWidth (C.px 600)] $ (".post-date" :: C.Selector) C.? ("min-width" C.-: "0")
+
+-- | Print-style list markers for content lists, per nesting level.
+printMarkers :: C.Css
+printMarkers = do
+    (".post-body ul" :: C.Selector) C.? C.listStyleType C.none
+    C.element "div.post-body ul li::marker" C.? ("content" C.-: "\"—\"")
+    C.element "div.post-body ul ul li::marker" C.? ("content" C.-: "\"◦\"")
+    C.element "div.post-body ul ul ul li::marker" C.? ("content" C.-: "\"▪\"")
+
+blockquoteInk :: C.Css
+blockquoteInk = C.blockquote C.? ("border-color" C.-: "var(--color-text)")
