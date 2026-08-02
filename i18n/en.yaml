@@ -1,0 +1,7 @@
+readingTime: "{0} min read"
+sectionTitle: "Posts"
+notFoundTitle: "Page not found."
+notFoundBody: "The page you are looking for does not exist."
+backHome: "Back to the home page"
+redirectingTo: "Redirecting to {0}"
+searchPlaceholder: "Search…"

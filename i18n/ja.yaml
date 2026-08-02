@@ -1,0 +1,7 @@
+readingTime: "約 {0} 分"
+sectionTitle: "記事"
+notFoundTitle: "ページが見つかりません"
+notFoundBody: "お探しのページは存在しません。"
+backHome: "ホームに戻る"
+redirectingTo: "{0} にリダイレクトしています"
+searchPlaceholder: "検索…"

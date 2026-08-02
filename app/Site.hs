@@ -68,7 +68,7 @@ buildWork paths config posts = do
                 TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
                 write404 paths config nav (sp404 sp)
                 writePages paths config nav (spNormal sp)
-                writeRedirects paths (specialPages sp <> spRedirects sp)
+                writeRedirects paths config (specialPages sp <> spRedirects sp)
                 writeStyleSheet paths config
                 mapM_ (writePost paths config nav posts) posts
                 writeTagPages paths config nav (spTags sp) posts
@@ -121,8 +121,8 @@ writePages paths config nav pages =
 {- | Write redirect pages for special pages whose file slug differs
 from their canonical URL.
 -}
-writeRedirects :: Paths -> [(Text, CustomPage)] -> IO ()
-writeRedirects paths specials =
+writeRedirects :: Paths -> SiteConfig -> [(Text, CustomPage)] -> IO ()
+writeRedirects paths config specials =
     mapM_ writeOne [(slug, page) | (slug, page) <- specials, "/" <> slug <> "/" /= canonical page]
   where
     canonical :: CustomPage -> Text
@@ -131,7 +131,7 @@ writeRedirects paths specials =
     writeOne (slug, page) = do
         let dir = pOut paths </> T.unpack slug
         createDirectoryIfMissing True dir
-        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderRedirect (canonical page))))
+        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderRedirect config (canonical page))))
 
 writeStyleSheet :: Paths -> SiteConfig -> IO ()
 writeStyleSheet paths config = do

@@ -19,6 +19,7 @@ import Feed (feedUrl, renderAtom)
 import Format (formatOne)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
 import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
+import I18n (UILang (..), fromSiteLang, messages, t, tWith)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
@@ -187,6 +188,10 @@ tests =
         , indexPageExcludedFromNav
         , darkThemeAttributeSelectors
         , themeToggleScriptInjected
+        , i18nCompleteness
+        , i18nFromSiteLang
+        , i18nPlaceholders
+        , i18nPageOutput
         , frontmatterPageDefaults
         , frontmatterNoDateError
         , frontmatterDraftNoDate
@@ -330,6 +335,46 @@ postNavRendered =
             page = renderHtml (renderPost testConfig [] (Just newer, Just older) (postWithTags []))
         assertBool "prev link" ("href=\"/posts/newer/\">Newer</a>" `textIn` page)
         assertBool "next link" ("href=\"/posts/older/\">Older</a>" `textIn` page)
+
+i18nCompleteness :: TestTree
+i18nCompleteness =
+    testCase "every language file has the same key set as English" $ do
+        mapM_ checkLang [Zh, ZhHant, Ja]
+  where
+    checkLang :: UILang -> IO ()
+    checkLang lang = do
+        let enKeys = sort (map fst (messages En))
+            langKeys = sort (map fst (messages lang))
+        assertEqual (show lang <> " keys") enKeys langKeys
+
+i18nFromSiteLang :: TestTree
+i18nFromSiteLang =
+    testCase "siteLang maps to UI languages" $ do
+        assertEqual "zh default" Zh (fromSiteLang "zh-CN")
+        assertEqual "traditional" ZhHant (fromSiteLang "zh-TW")
+        assertEqual "traditional hk" ZhHant (fromSiteLang "zh_HK")
+        assertEqual "traditional script" ZhHant (fromSiteLang "zh-Hant")
+        assertEqual "ja" Ja (fromSiteLang "ja-JP")
+        assertEqual "en" En (fromSiteLang "en-US")
+        assertEqual "unknown" En (fromSiteLang "fr-FR")
+
+i18nPlaceholders :: TestTree
+i18nPlaceholders =
+    testCase "placeholders are substituted and missing keys fall back" $ do
+        assertEqual "zh time" "约 5 分钟" (tWith Zh "readingTime" ["5"])
+        assertEqual "en time" "5 min read" (tWith En "readingTime" ["5"])
+        assertEqual "ja time" "約 5 分" (tWith Ja "readingTime" ["5"])
+
+i18nPageOutput :: TestTree
+i18nPageOutput =
+    testCase "pages localize per siteLang" $ do
+        let zhPage = renderHtml (renderPost testConfig [] (Nothing, Nothing) ((postWithTags []){postText = T.replicate 900 "字"}))
+        assertBool "zh reading time" ("约 2 分钟" `textIn` zhPage)
+        let enPage = renderHtml (renderIndex testConfig{siteLang = "en"} [] (Just (mkPage (Just "Home") 0 Nothing)) [])
+        assertBool "en section title" ("Posts" `textIn` enPage)
+        assertBool "zh section title" ("文章" `textIn` renderHtml (renderIndex testConfig [] (Just (mkPage (Just "Home") 0 Nothing)) []))
+        let zh404 = renderHtml (render404 testConfig [])
+        assertBool "zh 404" ("页面不存在" `textIn` zh404)
 
 indexSpecialPageClassified :: TestTree
 indexSpecialPageClassified =
@@ -1299,7 +1344,7 @@ archiveYearGroups =
 redirectPageMetaRefresh :: TestTree
 redirectPageMetaRefresh =
     testCase "redirect pages carry a meta refresh and canonical link" $ do
-        let page = renderHtml (renderRedirect "/tags/")
+        let page = renderHtml (renderRedirect testConfig "/tags/")
         assertBool "meta refresh" ("http-equiv=\"refresh\" content=\"0; url=/tags/\"" `textIn` page)
         assertBool "canonical" ("rel=\"canonical\" href=\"/tags/\"" `textIn` page)
         assertBool "stylesheet" ("rel=\"stylesheet\" href=\"/style.css\"" `textIn` page)

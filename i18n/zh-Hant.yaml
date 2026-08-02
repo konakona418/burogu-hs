@@ -1,0 +1,7 @@
+readingTime: "約 {0} 分鐘"
+sectionTitle: "文章"
+notFoundTitle: "頁面不存在"
+notFoundBody: "你要找的頁面不存在。"
+backHome: "返回首頁"
+redirectingTo: "正在跳轉到 {0}"
+searchPlaceholder: "搜尋…"

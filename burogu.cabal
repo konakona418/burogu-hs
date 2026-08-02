@@ -21,6 +21,7 @@ executable burogu
                     , Format
                     , Frontmatter
                     , Html
+                    , I18n
                     , Init
                     , Posts
                     , Page
@@ -72,6 +73,7 @@ test-suite burogu-test
                     , Format
                     , Frontmatter
                     , Html
+                    , I18n
                     , Init
                     , Posts
                     , Page

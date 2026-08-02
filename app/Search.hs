@@ -7,10 +7,10 @@ import Data.Aeson (Value (..), encode, object, (.=))
 import Data.ByteString.Lazy qualified as BL
 import Data.FileEmbed (embedFile)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8)
 import Html (PageMeta (..))
 import Html qualified as H
+import I18n (fromSiteLang, t)
 import Lucid qualified as L
 import Lucid.Base qualified as LB
 import Page (CustomPage (..))
@@ -47,7 +47,7 @@ no-op when a user script (e.g. theme.extraJs) defines window.buroguSearch.
 -}
 renderSearch :: SiteConfig -> [(Text, Text)] -> Text -> L.Html ()
 renderSearch cfg navPages title = H.layout cfg navPages pageMeta $ do
-    L.input_ [L.class_ "search-input", L.type_ "search", LB.makeAttribute "placeholder" "Search…", LB.makeAttribute "autofocus" ""]
+    L.input_ [L.class_ "search-input", L.type_ "search", LB.makeAttribute "placeholder" (t (fromSiteLang (siteLang cfg)) "searchPlaceholder"), LB.makeAttribute "autofocus" ""]
     L.ul_ [L.class_ "post-list", L.id_ "search-results"] (pure ())
     L.script_ (searchScript :: Text)
   where
