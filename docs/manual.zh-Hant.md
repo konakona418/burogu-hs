@@ -365,6 +365,9 @@ URL）開頭，其餘格式是建置錯誤；目標等於本頁自己的 slug UR
 頁面內文（raw HTML）。markdown 內文被忽略。
 
 `script`   腳本檔案，位於 `src/_scripts/`，如 `hello.d`
+`output`   站台根目錄內的相對路徑：腳本結果寫入該檔案，不再生
+           成頁面（如 `data.json`）；頁面本體不轉譯、不進導覽列。
+           需要 `script`；不能與 `redirectAs` 組合；路徑重複是錯誤
 
 腳本求值時注入站台上下文：
 
@@ -419,6 +422,7 @@ else expr end`（`else` 分支可省）。運算子：`+ - * / % == != <
     take(a, n)      前 n 個元素（或字元）
     drop(a, n)      去掉前 n 個元素（或字元）
     toStr(v)        數字/布林/nil/字串轉字串
+    toJson(v)       值轉 pretty JSON（nil 變 null）
     puts(...)       印出參數到 stderr（回傳 nil）
 
 #### 範例

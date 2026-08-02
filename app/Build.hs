@@ -41,6 +41,7 @@ printSummary paths nPosts report = do
     TIO.putStrLn ("  Posts generated : " <> T.pack (show nPosts))
     TIO.putStrLn ("  Tags generated  : " <> T.pack (show (brTagPages report)))
     TIO.putStrLn ("  Static files    : " <> T.pack (show (brStaticFiles report)))
+    TIO.putStrLn ("  Script files    : " <> T.pack (show (brScriptFiles report)))
     TIO.putStrLn ("  Feed            : " <> if brFeed report then "feed.xml" else "skipped (set baseUrl in config.yaml)")
     TIO.putStrLn ("  Sitemap         : " <> if brSitemap report then "sitemap.xml" else "skipped (set baseUrl in config.yaml)")
     TIO.putStrLn ("  Output directory: " <> T.pack (pOut paths))

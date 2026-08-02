@@ -1,4 +1,4 @@
-module Value (Env, LangError (..), Value (..), FunValue (..), numericToText, showValue, strOf) where
+module Value (Env, LangError (..), Value (..), FunValue (..), numericToText, showValue, strOf, valueToJson) where
 
 import Data.Map.Strict qualified as Map
 import Data.Scientific (Scientific, floatingOrInteger)
@@ -82,3 +82,49 @@ strOf v = case v of
     VBool b -> Right (if b then "true" else "false")
     VNil -> Right "nil"
     _ -> Left ("cannot convert " <> showValue v <> " to string")
+
+{- | Pretty JSON (two-space indent) for `toJson`. Map keys are in
+alphabetical order. Functions are not serialisable.
+-}
+valueToJson :: Value -> Either Text Text
+valueToJson = go 0
+  where
+    go :: Int -> Value -> Either Text Text
+    go depth x = case x of
+        VNum s -> Right (numericToText s)
+        VStr t -> Right (jsonString t)
+        VBool b -> Right (if b then "true" else "false")
+        VNil -> Right "null"
+        VArr vs -> case V.toList vs of
+            [] -> Right "[]"
+            items -> do
+                parts <- mapM (go (depth + 1)) items
+                Right ("[\n" <> indent (depth + 1) <> T.intercalate (",\n" <> indent (depth + 1)) parts <> "\n" <> indent depth <> "]")
+        VMap m -> case Map.toList m of
+            [] -> Right "{}"
+            entries -> do
+                parts <- mapM (entry (depth + 1)) entries
+                Right ("{\n" <> indent (depth + 1) <> T.intercalate (",\n" <> indent (depth + 1)) parts <> "\n" <> indent depth <> "}")
+        VFun _ -> Left "cannot serialize a function"
+        VNative _ _ -> Left "cannot serialize a function"
+      where
+        entry d (k, val) = do
+            j <- go d val
+            Right (jsonString k <> ": " <> j)
+
+    indent :: Int -> Text
+    indent n = T.replicate n "  "
+
+    jsonString :: Text -> Text
+    jsonString t =
+        "\""
+            <> T.concatMap escape t
+            <> "\""
+      where
+        escape c = case c of
+            '"' -> "\\\""
+            '\\' -> "\\\\"
+            '\n' -> "\\n"
+            '\t' -> "\\t"
+            '\r' -> "\\r"
+            _ -> T.singleton c

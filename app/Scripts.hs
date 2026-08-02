@@ -5,6 +5,7 @@ import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
@@ -24,34 +25,76 @@ scriptsDirName = "_scripts"
 
 {- | Evaluate every page that declares a `script:` frontmatter field:
 the script (a file under `src/_scripts/`) runs with the site context
-bound and its string result becomes the page body (raw HTML). `puts`
-output goes to stderr. Pages without a script are unchanged. Errors
-are aggregated as one message per failing page.
+bound and its string result becomes the page body (raw HTML). A page
+with both `script:` and `output:` is a file generator: its script
+result is returned as an output file instead (path relative to the
+site root) and the page itself is dropped. `puts` output goes to
+stderr. Errors are aggregated as one message per failing page.
 -}
-runPageScripts :: Paths -> SiteConfig -> [Post] -> [(Text, CustomPage)] -> IO (Either [Text] [(Text, CustomPage)])
+runPageScripts :: Paths -> SiteConfig -> [Post] -> [(Text, CustomPage)] -> IO (Either [Text] ([(Text, CustomPage)], [(FilePath, Text)]))
 runPageScripts paths config posts pages = do
     results <- mapM runOne pages
     let errs = [e | Left e <- results]
-    if null errs
-        then pure (Right [p | Right p <- results])
-        else pure (Left errs)
+    if not (null errs)
+        then pure (Left errs)
+        else do
+            let keptPages = [p | Right (Just p, _) <- results]
+                files = [(o, c) | Right (_, fs) <- results, (o, c) <- fs]
+            case duplicateOutput (map fst files) of
+                Just dup -> pure (Left [dup])
+                Nothing -> pure (Right (keptPages, files))
   where
     env = scriptCtx config posts pages
 
-    runOne :: (Text, CustomPage) -> IO (Either Text (Text, CustomPage))
-    runOne (slug, page) = case cpScript page of
-        Nothing -> pure (Right (slug, page))
-        Just scriptName -> do
-            econtent <-
-                (Right <$> TIO.readFile (pSrc paths </> scriptsDirName </> T.unpack scriptName))
-                    `catch` \(e :: IOException) -> pure (Left (T.pack (show e)))
-            case econtent of
-                Left err -> pure (Left (slug <> ": script " <> scriptName <> ": " <> err))
-                Right content -> case evalScript env content of
-                    Left err -> pure (Left (slug <> ": script " <> scriptName <> ": " <> err))
-                    Right (body, out) -> do
-                        mapM_ (TIO.hPutStrLn stderr) out
-                        pure (Right (slug, page{cpBodyHtml = body, cpHasMath = False, cpText = body}))
+    runOne :: (Text, CustomPage) -> IO (Either Text (Maybe (Text, CustomPage), [(FilePath, Text)]))
+    runOne (slug, page)
+        | isJust (cpOutput page) && isNothing (cpScript page) =
+            pure (Left (slug <> ": 'output' requires a 'script' field"))
+        | isJust (cpOutput page) && isJust (cpRedirectAs page) =
+            pure (Left (slug <> ": 'output' and 'redirectAs' cannot be combined"))
+        | isJust (cpOutput page) = do
+            let outPath = fromJust (cpOutput page)
+            case validateOutput outPath of
+                Left err -> pure (Left (slug <> ": " <> err))
+                Right path -> do
+                    eresult <- evalOne slug (fromJust (cpScript page))
+                    case eresult of
+                        Left err -> pure (Left err)
+                        Right (body, out) -> do
+                            mapM_ (TIO.hPutStrLn stderr) out
+                            pure (Right (Nothing, [(path, body)]))
+        | isJust (cpScript page) = do
+            eresult <- evalOne slug (fromJust (cpScript page))
+            case eresult of
+                Left err -> pure (Left err)
+                Right (body, out) -> do
+                    mapM_ (TIO.hPutStrLn stderr) out
+                    pure (Right (Just (slug, page{cpBodyHtml = body, cpHasMath = False, cpText = body}), []))
+        | otherwise = pure (Right (Just (slug, page), []))
+
+    evalOne :: Text -> Text -> IO (Either Text (Text, [Text]))
+    evalOne slug scriptName = do
+        econtent <-
+            (Right <$> TIO.readFile (pSrc paths </> scriptsDirName </> T.unpack scriptName))
+                `catch` \(e :: IOException) -> pure (Left (T.pack (show e)))
+        pure $ case econtent of
+            Left err -> Left (slug <> ": script " <> scriptName <> ": " <> err)
+            Right content -> case evalScript env content of
+                Left err -> Left (slug <> ": script " <> scriptName <> ": " <> err)
+                Right r -> Right r
+
+    validateOutput :: Text -> Either Text FilePath
+    validateOutput p
+        | T.null p = Left "'output' must not be empty"
+        | "/" `T.isPrefixOf` p = Left ("'output' must be a relative path, got '" <> p <> "'")
+        | ".." `elem` T.splitOn "/" p = Left ("'output' must not contain '..', got '" <> p <> "'")
+        | otherwise = Right (T.unpack p)
+
+    duplicateOutput :: [FilePath] -> Maybe Text
+    duplicateOutput paths' =
+        case [p | (p, n) <- Map.toList (Map.fromListWith (+) [(p, 1 :: Int) | p <- paths']), n > 1] of
+            [] -> Nothing
+            dup : _ -> Just ("duplicate output path: " <> T.pack dup)
 
 {- | Parse and evaluate a script, returning its string result and the
 collected `puts` output.

@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Eval (applyValueOut, truthy)
-import Value (Env, LangError (..), Value (..), numericToText, showValue, strOf)
+import Value (Env, LangError (..), Value (..), numericToText, showValue, strOf, valueToJson)
 
 {- | The builtin function table. `puts` collects its output (returned
 in the output channel) instead of printing.
@@ -34,6 +34,7 @@ builtins =
     , ("keys", b1 "keys" keysOf)
     , ("values", b1 "values" valuesOf)
     , ("toStr", b1 "toStr" $ \v -> either (Left . msg) (Right . VStr) (strOf v))
+    , ("toJson", b1 "toJson" $ \v -> either (Left . msg) (Right . VStr) (valueToJson v))
     , ("contains", b2 "contains" containsOf)
     , ("trim", b1 "trim" $ \v -> either (Left . msg) (Right . VStr . T.strip) (strOf v))
     , ("lower", b1 "lower" $ \v -> either (Left . msg) (Right . VStr . T.toLower) (strOf v))

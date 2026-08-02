@@ -28,6 +28,7 @@ data CustomPage = CustomPage
     , cpRedirectAs :: Maybe Text
     , cpHiddenInNavbar :: Bool
     , cpScript :: Maybe Text
+    , cpOutput :: Maybe Text
     , cpText :: Text
     }
     deriving (Eq, Show)
@@ -58,7 +59,7 @@ loadPage math path = do
                                     Right priority -> case pageHiddenInNavbar doc of
                                         Left err -> pure (Left err)
                                         Right hidden ->
-                                            pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc, cpHiddenInNavbar = hidden, cpScript = pageScript doc, cpText = bodyText doc}))
+                                            pure (Right (Just CustomPage{cpTitle = pageTitle doc, cpBodyHtml = body, cpHasMath = docHasMath doc, cpPriority = priority, cpRedirectAs = pageRedirectAs doc, cpHiddenInNavbar = hidden, cpScript = pageScript doc, cpOutput = pageOutput doc, cpText = bodyText doc}))
 
 {- | Load all custom pages from a directory of markdown files. Each file
 becomes a page keyed by its basename without the .md extension; slugs
@@ -105,6 +106,12 @@ pageRedirectAs (Pandoc meta _) =
 pageScript :: Pandoc -> Maybe Text
 pageScript (Pandoc meta _) =
     case lookupMeta "script" meta of
+        Just value -> metaText value
+        Nothing -> Nothing
+
+pageOutput :: Pandoc -> Maybe Text
+pageOutput (Pandoc meta _) =
+    case lookupMeta "output" meta of
         Just value -> metaText value
         Nothing -> Nothing
 

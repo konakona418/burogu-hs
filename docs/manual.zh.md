@@ -363,6 +363,9 @@ site/                构建输出（每次构建重新生成）
 就是页面正文（raw HTML）。markdown 正文被忽略。
 
 `script`   脚本文件，位于 `src/_scripts/`，如 `hello.d`
+`output`   站点根目录内的相对路径：脚本结果写入该文件，不再生
+           成页面（如 `data.json`）；页面本体不渲染、不进导航。
+           需要 `script`；不能与 `redirectAs` 组合；路径重复是错误
 
 脚本求值时注入站点上下文：
 
@@ -417,6 +420,7 @@ else expr end`（`else` 分支可省）。运算符：`+ - * / % == != <
     take(a, n)      前 n 个元素（或字符）
     drop(a, n)      去掉前 n 个元素（或字符）
     toStr(v)        数字/布尔/nil/字符串转字符串
+    toJson(v)       值转 pretty JSON（nil 变 null）
     puts(...)       打印参数到 stderr（返回 nil）
 
 #### 示例

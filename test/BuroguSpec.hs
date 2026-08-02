@@ -1256,7 +1256,7 @@ mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
 mkPage title priority redirect = mkPageHidden title priority redirect False
 
 mkPageHidden :: Maybe Text -> Int -> Maybe Text -> Bool -> CustomPage
-mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpScript = Nothing, cpText = ""}
+mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpScript = Nothing, cpOutput = Nothing, cpText = ""}
 
 classifySpecialPages :: TestTree
 classifySpecialPages =
@@ -1924,6 +1924,11 @@ dslBuiltins =
         assertEqual "take str" (Right "\"he\"") (runLang "take(\"hello\", 2)")
         assertEqual "drop" (Right "[3]") (runLang "drop([1, 2, 3], 2)")
         assertEqual "take negative" (Right "[]") (runLang "take([1, 2], -1)")
+        assertEqual "toJson map" (Right "\"{\n  \"a\": 1\n}\"") (runLang "toJson({\"a\" => 1})")
+        assertEqual "toJson arr" (Right "\"[\n  1,\n  2\n]\"") (runLang "toJson([1, 2])")
+        assertEqual "toJson escape" (Right "\"\"a\\\"b\"\"") (runLang "toJson(\"a\\\"b\")")
+        assertEqual "toJson nil" (Right "\"null\"") (runLang "toJson(nil)")
+        assertEqual "toJson fun" (Left "cannot serialize a function [\"toJson\"]") (runLangErr "toJson({ x -> x })")
 
 dslPutsOutput :: TestTree
 dslPutsOutput =
@@ -1987,6 +1992,13 @@ scriptsTests =
     , buildScriptPage
     , buildScriptPageFull
     , scriptErrorKeepsOldOutput
+    , buildScriptOutput
+    , scriptOutputAbsoluteRejected
+    , scriptOutputParentRejected
+    , scriptOutputWithoutScript
+    , scriptOutputWithRedirect
+    , scriptOutputDuplicate
+    , scriptOutputOverridesStatic
     ]
 
 scriptsEvalBasic :: TestTree
@@ -2018,13 +2030,17 @@ scriptsErrorFormat =
 
 scriptFrontmatterField :: TestTree
 scriptFrontmatterField =
-    testCase "page frontmatter keeps a script field" $ do
-        result <- pure (normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\n")
+    testCase "page frontmatter keeps script and output fields" $ do
+        result <- pure (normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\noutput: data.json\n")
         case result of
             Left err -> assertBool ("expected success, got " <> T.unpack err) False
             Right (block, _) -> do
                 assertBool "script kept" ("script: hello.d" `textIn` block)
-                assertBool "script in known keys" (not ("unknown" `T.isInfixOf` block))
+                assertBool "output kept" ("output: data.json" `textIn` block)
+                assertBool "known keys" (not ("unknown" `T.isInfixOf` block))
+        case normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\n" of
+            Left err -> assertBool ("expected success, got " <> T.unpack err) False
+            Right (block, _) -> assertBool "output omitted when empty" (not ("output" `T.isInfixOf` block))
 
 buildScriptPage :: TestTree
 buildScriptPage =
@@ -2071,3 +2087,97 @@ buildScriptPageFull =
             Right _ -> pure ()
         content <- TIO.readFile "/tmp/burogu-test/scriptfull-out/list/index.html"
         assertBool "full fragment" ("<ul><li>Alpha</li><li>Beta</li></ul><p>x, y</p>" `textIn` content)
+
+buildScriptOutput :: TestTree
+buildScriptOutput =
+    testCase "an output page writes a file instead of a page" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptout-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptout-src/_scripts"
+        writeFile "/tmp/burogu-test/scriptout-src/_pages/data.md" "---\ntitle: Data\nscript: data.d\noutput: data.json\n---\n"
+        writeFile "/tmp/burogu-test/scriptout-src/_scripts/data.d" "toJson(map(posts, { p -> get(p, \"title\") }))"
+        let p1 = (postWithTags []){postTitle = "Alpha", postSlug = "alpha"}
+        report <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/scriptout-src", pOut = "/tmp/burogu-test/scriptout-out"} testConfig [p1]) :: IO (Either IOException BuildReport)
+        case report of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right r -> assertEqual "script files" 1 (brScriptFiles r)
+        content <- TIO.readFile "/tmp/burogu-test/scriptout-out/data.json"
+        assertBool "json" ("[\n  \"Alpha\"\n]" `textIn` content)
+        pageExists <- doesFileExist "/tmp/burogu-test/scriptout-out/data/index.html"
+        assertBool "no page generated" (not pageExists)
+        index <- TIO.readFile "/tmp/burogu-test/scriptout-out/index.html"
+        assertBool "not in nav" (not ("/data/" `T.isInfixOf` index))
+
+scriptOutputAbsoluteRejected :: TestTree
+scriptOutputAbsoluteRejected =
+    testCase "an absolute output path is a hard error" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outabs-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/outabs-src/_scripts"
+        writeFile "/tmp/burogu-test/outabs-src/_pages/x.md" "---\nscript: x.d\noutput: /data.json\n---\n"
+        writeFile "/tmp/burogu-test/outabs-src/_scripts/x.d" "\"x\""
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outabs-src", pOut = "/tmp/burogu-test/outabs-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptOutputParentRejected :: TestTree
+scriptOutputParentRejected =
+    testCase "a parent-traversing output path is a hard error" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outpar-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/outpar-src/_scripts"
+        writeFile "/tmp/burogu-test/outpar-src/_pages/x.md" "---\nscript: x.d\noutput: ../data.json\n---\n"
+        writeFile "/tmp/burogu-test/outpar-src/_scripts/x.d" "\"x\""
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outpar-src", pOut = "/tmp/burogu-test/outpar-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptOutputWithoutScript :: TestTree
+scriptOutputWithoutScript =
+    testCase "output without script is a hard error" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outnos-src/_pages"
+        writeFile "/tmp/burogu-test/outnos-src/_pages/x.md" "---\ntitle: X\noutput: data.json\n---\n"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outnos-src", pOut = "/tmp/burogu-test/outnos-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptOutputWithRedirect :: TestTree
+scriptOutputWithRedirect =
+    testCase "output combined with redirectAs is a hard error" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outred-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/outred-src/_scripts"
+        writeFile "/tmp/burogu-test/outred-src/_pages/x.md" "---\nscript: x.d\noutput: data.json\nredirectAs: /elsewhere/\n---\n"
+        writeFile "/tmp/burogu-test/outred-src/_scripts/x.d" "\"x\""
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outred-src", pOut = "/tmp/burogu-test/outred-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptOutputDuplicate :: TestTree
+scriptOutputDuplicate =
+    testCase "duplicate output paths are a hard error" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outdup-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/outdup-src/_scripts"
+        writeFile "/tmp/burogu-test/outdup-src/_pages/a.md" "---\nscript: a.d\noutput: data.json\n---\n"
+        writeFile "/tmp/burogu-test/outdup-src/_pages/b.md" "---\nscript: b.d\noutput: data.json\n---\n"
+        writeFile "/tmp/burogu-test/outdup-src/_scripts/a.d" "\"a\""
+        writeFile "/tmp/burogu-test/outdup-src/_scripts/b.d" "\"b\""
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outdup-src", pOut = "/tmp/burogu-test/outdup-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+
+scriptOutputOverridesStatic :: TestTree
+scriptOutputOverridesStatic =
+    testCase "script output overrides a static file of the same name" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/outov-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/outov-src/_scripts"
+        writeFile "/tmp/burogu-test/outov-src/_pages/x.md" "---\nscript: x.d\noutput: data.json\n---\n"
+        writeFile "/tmp/burogu-test/outov-src/_scripts/x.d" "\"from script\""
+        writeFile "/tmp/burogu-test/outov-src/data.json" "from static"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/outov-src", pOut = "/tmp/burogu-test/outov-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        content <- TIO.readFile "/tmp/burogu-test/outov-out/data.json"
+        assertEqual "overridden" "from script" (T.unpack content)
