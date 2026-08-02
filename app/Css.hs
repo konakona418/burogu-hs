@@ -208,8 +208,13 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
         "--space-page-top" C.-: "16px"
         "--space-page-side" C.-: "12px"
     C.pre C.? ("font-size" C.-: "14px")
-    C.nav C.? C.a C.? ("padding" C.-: "8px 4px")
-    (".site-name" :: C.Selector) C.? ("flex-basis" C.-: "100%")
+    C.nav C.? C.a C.? ("padding" C.-: "4px 4px")
+    C.nav C.? ("gap" C.-: "0 var(--space-nav-link)")
+    (".site-name" :: C.Selector) C.? do
+        "flex-basis" C.-: "100%"
+        "padding" C.-: "0"
+        "border-right" C.-: "none"
+        "margin-bottom" C.-: "4px"
 
 listSpacing :: C.Css
 listSpacing = do
@@ -236,15 +241,20 @@ rootTokens tokens = (":root" :: C.Selector) C.? mapM_ emit tokens
 {- | Dark tokens are emitted three times: under the system
 prefers-color-scheme query, and under explicit html[data-theme] values
 (the theme.js toggle). The attribute selectors outrank :root, so an
-explicit light/dark choice wins over the system preference.
+explicit light/dark choice wins over the system preference. Only
+color tokens are re-emitted — the layout tokens stay owned by the
+:root blocks (including the mobile breakpoint).
 -}
 darkTokens :: [(Text, Text)] -> [(Text, Text)] -> C.Css
 darkTokens light dark =
     mconcat
         [ C.query CM.screen [CM.prefersColorScheme CM.dark] $ (":root" :: C.Selector) C.? mapM_ emit dark
         , C.element "html[data-theme=\"dark\"]" C.? mapM_ emit dark
-        , C.element "html[data-theme=\"light\"]" C.? mapM_ emit light
+        , C.element "html[data-theme=\"light\"]" C.? mapM_ emit (colorOnly light)
         ]
+
+colorOnly :: [(Text, Text)] -> [(Text, Text)]
+colorOnly = filter (\(k, _) -> "color-" `T.isPrefixOf` k || "token-" `T.isPrefixOf` k)
 
 emit :: (Text, Text) -> C.Css
 emit (key, value) = C.Key (C.Plain ("--" <> key)) C.-: value

@@ -406,6 +406,8 @@ darkThemeAttributeSelectors =
         let css = renderCss ariaPreset emptyFonts []
         assertBool "dark attribute" ("html[data-theme=\"dark\"]" `textIn` css)
         assertBool "light attribute" ("html[data-theme=\"light\"]" `textIn` css)
+        let declarations = [l | l <- T.lines css, "  --space-page-top" `T.isPrefixOf` l]
+        assertEqual "layout tokens not duplicated" 2 (length declarations)
 
 themeToggleScriptInjected :: TestTree
 themeToggleScriptInjected =

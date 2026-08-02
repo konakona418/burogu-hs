@@ -99,15 +99,6 @@ html[data-theme="light"]
   --color-link-hover : #0055aa;
   --color-code-bg    : #f5f5f5;
   --color-mark       : #ffe58f;
-  --font-family      : "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-size        : 17px;
-  --line-height      : 28px;
-  --content-width    : 800px;
-  --space-page-top   : 24px;
-  --space-page-side  : 16px;
-  --space-list-gap   : 8px;
-  --space-nav-gap    : 24px;
-  --space-nav-link   : 12px;
   --token-al         : #ef2929;
   --token-an         : #8f5902;
   --token-at         : #204a87;
@@ -565,12 +556,20 @@ pre
 
 nav a
 {
-  padding : 8px 4px;
+  padding : 4px 4px;
+}
+
+nav
+{
+  gap : 0 var(--space-nav-link);
 }
 
 .site-name
 {
-  flex-basis : 100%;
+  flex-basis    : 100%;
+  padding       : 0;
+  border-right  : none;
+  margin-bottom : 4px;
 }
 
 }
