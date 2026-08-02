@@ -6,7 +6,7 @@ import Deploy qualified
 import Doc qualified
 import Format qualified
 import Init qualified
-import NewPost qualified
+import Posts qualified
 import Sync qualified
 import System.Directory (removePathForcibly)
 import System.IO (BufferMode (LineBuffering), hSetBuffering, hSetEncoding, stderr, stdout, utf8)
@@ -24,7 +24,9 @@ main = do
         Preview port -> runPreview port
         Watch mServe -> runWatch mServe
         Init dir -> Init.run dir
-        NewPost slug draft -> NewPost.run slug draft
+        New slug -> Posts.orDie (Posts.runNew "src/_post" slug)
+        Draft slug -> Posts.orDie (Posts.runDraft "src/_post" slug)
+        Publish slug -> Posts.orDie (Posts.runPublish "src/_post" slug)
         Deploy clear -> Deploy.run clear
         Sync action mRepo -> Sync.run action mRepo
         Format dryRun paths -> Format.run paths dryRun

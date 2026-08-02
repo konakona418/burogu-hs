@@ -20,7 +20,9 @@ data Command
     | Preview {pPort :: Int}
     | Watch {wServe :: Maybe Int}
     | Init {iDir :: FilePath}
-    | NewPost {nSlug :: Text, nDraft :: Bool}
+    | New {nSlug :: Text}
+    | Draft {dSlug :: Text}
+    | Publish {pSlug :: Text}
     | Deploy {dClearCache :: Bool}
     | Sync {sAction :: Text, sRepo :: Maybe Text}
     | Format {fDryRun :: Bool, fPaths :: Paths}
@@ -45,7 +47,9 @@ commands =
         <> command "preview" (info (Preview <$> portParser) (progDesc "Build once, then serve the site locally"))
         <> command "watch" (info (Watch <$> serveParser) (progDesc "Rebuild when sources change, optionally serve"))
         <> command "init" (info (Init <$> dirParser) (progDesc "Initialize an src/ tree"))
-        <> command "new-post" (info (NewPost <$> slugParser <*> draftParser) (progDesc "Create a new post from a template"))
+        <> command "new" (info (New <$> slugParser) (progDesc "Create a new post (dated with today's date)"))
+        <> command "draft" (info (Draft <$> slugParser) (progDesc "Create a draft (draft: true, not published)"))
+        <> command "publish" (info (Publish <$> slugParser) (progDesc "Publish a draft (adds the date, removes the draft flag)"))
         <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site (rsync or git, configured in config.yaml)"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a remote git repository"))
         <> command "format" (info (Format <$> dryRunParser <*> pathsParser) (progDesc "Normalize config.yaml, posts and pages (frontmatter defaults, canonical order)"))
@@ -118,9 +122,6 @@ dirParser =
 
 slugParser :: Parser Text
 slugParser = strArgument (metavar "SLUG" <> help "Post slug (used in the filename and URL)")
-
-draftParser :: Parser Bool
-draftParser = switch (long "draft" <> help "Create a draft (no date)")
 
 clearCacheParser :: Parser Bool
 clearCacheParser = switch (long "clear-cache" <> help "Remove the persistent git cache (next deploy re-fetches from scratch)")

@@ -24,7 +24,9 @@ Commands:
 `preview`    build once, then serve the site locally
 `watch`      rebuild when sources change, optionally serve
 `init`       initialize an src/ tree
-`new-post`   create a post from a template
+`new`        create a post (today's date)
+`draft`      create a draft (not published)
+`publish`    publish a draft
 `deploy`     build and deploy the site (rsync or git)
 `sync`       sync the site repository with a git remote
 `format`     normalize config.yaml, posts and pages
@@ -127,21 +129,49 @@ burogu init [DIR]
 
 `DIR`  target directory (default: src)
 
-### new-post
+### new
 
-Create a post from a template.
+Create a post with today's date.
 
 ```
-burogu new-post SLUG [--draft]
+burogu new SLUG
 ```
 
-`SLUG`    post slug; used in the filename and the URL. The characters
-          / ? # % and spaces are not allowed
-`--draft` create a draft (no date; not published)
+`SLUG`  post slug; used in the filename and the URL. The characters
+        / ? # % and spaces are not allowed
 
-A regular post is named `YYYY-MM-DD-SLUG.md` (today's date) and gets
-a `date:` frontmatter; a draft is named `SLUG.md` with `draft: true`
-and needs no date.
+The post is named `YYYY-MM-DD-SLUG.md` with a `date:` frontmatter.
+A slug that already exists (as a post or a draft) is rejected.
+
+### draft
+
+Create a draft (not published).
+
+```
+burogu draft SLUG
+```
+
+`SLUG`  post slug; used in the filename and the URL. The characters
+        / ? # % and spaces are not allowed
+
+The draft is named `YYYY-MM-DD-SLUG.md` (today's date) with
+`draft: true` and no date field. The filename date is just the
+creation date; the published date comes from the frontmatter.
+
+### publish
+
+Publish a draft: add the date and drop the draft flag, in place.
+
+```
+burogu publish SLUG
+```
+
+`SLUG`  post slug
+
+The date is taken from an existing `date:` frontmatter, or today
+when there is none; `draft: true` becomes `draft: false` and the
+frontmatter is normalized. The filename does not change. Publish
+fails when the slug is missing or the file is not a draft.
 
 ### deploy
 

@@ -24,7 +24,9 @@ burogu - 静的ブログ生成ツール
 `preview`     一度生成してから、ローカルでサイトを配信する
 `watch`       ソース変更時に再生成する（任意で配信も行う）
 `init`        src/ ディレクトリツリーを初期化する
-`new-post`    テンプレートから記事を作成する
+`new`         記事を作成する（今日の日付）
+`draft`       下書きを作成する（公開されない）
+`publish`     下書きを公開する
 `deploy`      サイトを生成してデプロイする（rsync または git）
 `sync`        サイトリポジトリと git リモートを同期する
 `format`      config.yaml・記事・ページを正規化する
@@ -130,21 +132,50 @@ burogu init [DIR]
 
 `DIR`  対象ディレクトリ（デフォルト：src）
 
-### new-post
+### new
 
-テンプレートから新しい記事を作成します。
+今日の日付で記事を作成します。
 
 ```
-burogu new-post SLUG [--draft]
+burogu new SLUG
 ```
 
-`SLUG`    記事スラッグ。ファイル名と URL に使用。/ ? # % と
-          スペースは使用できません
-`--draft` 下書きを作成する（日付なし、公開されない）
+`SLUG`  記事スラッグ。ファイル名と URL に使用。/ ? # % と
+        スペースは使用できません
 
-通常の記事は `YYYY-MM-DD-SLUG.md`（今日の日付）として作成され、
-`date:` frontmatter が書き込まれます。下書きは `SLUG.md`、
-`draft: true` で日付は不要です。
+記事は `YYYY-MM-DD-SLUG.md` として作成され、`date:` frontmatter
+を持ちます。スラッグが既に存在する場合（記事・下書きのどちらも）
+作成は拒否されます。
+
+### draft
+
+下書きを作成します（公開されません）。
+
+```
+burogu draft SLUG
+```
+
+`SLUG`  記事スラッグ。ファイル名と URL に使用。/ ? # % と
+        スペースは使用できません
+
+下書きは `YYYY-MM-DD-SLUG.md`（今日の日付）として作成され、
+`draft: true` で date フィールドはありません。ファイル名の日付は
+作成日を示すだけです。公開日は frontmatter が基準になります。
+
+### publish
+
+下書きを公開します：日付を追加し、下書きフラグを外します。
+
+```
+burogu publish SLUG
+```
+
+`SLUG`  記事スラッグ
+
+日付は frontmatter の既存の `date:` を優先し、なければ今日を
+使います。`draft: true` は `draft: false` になり、frontmatter は
+正規化されます。ファイル名は変わりません。スラッグが見つから
+ないか、ファイルが下書きでない場合はエラーになります。
 
 ### deploy
 

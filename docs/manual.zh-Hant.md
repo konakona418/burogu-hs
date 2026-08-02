@@ -24,7 +24,9 @@ burogu - 靜態部落格產生器
 `preview`    建置一次，然後在本地提供站台服務
 `watch`      來源檔案變更時重新建置，可選附帶服務
 `init`       初始化 src/ 目錄樹
-`new-post`   從範本建立一篇新文章
+`new`        建立一篇正式文章（今天日期）
+`draft`      建立一篇草稿（不發布）
+`publish`    發布草稿
 `deploy`     建置並部署站台（rsync 或 git）
 `sync`       將站台儲存庫與 git 遠端同步
 `format`     正規化 config.yaml、文章與頁面
@@ -117,19 +119,46 @@ burogu init [DIR]
 
 `DIR`  目標目錄（預設：src）
 
-### new-post
+### new
 
-從範本建立一篇新文章。
+建立一篇今天日期的正式文章。
 
 ```
-burogu new-post SLUG [--draft]
+burogu new SLUG
 ```
 
-`SLUG`    文章 slug，用於檔案名稱與 URL；不允許 / ? # % 與空格
-`--draft` 建立草稿（無日期、不發布）
+`SLUG`  文章 slug，用於檔案名稱與 URL；不允許 / ? # % 與空格
 
-正式文章命名為 `YYYY-MM-DD-SLUG.md`（今天的日期），並寫入
-`date:` frontmatter；草稿命名為 `SLUG.md`、`draft: true`，無需日期。
+文章命名為 `YYYY-MM-DD-SLUG.md`，帶 `date:` frontmatter。slug
+已存在（無論是文章還是草稿）時拒絕建立。
+
+### draft
+
+建立一篇草稿（不發布）。
+
+```
+burogu draft SLUG
+```
+
+`SLUG`  文章 slug，用於檔案名稱與 URL；不允許 / ? # % 與空格
+
+草稿命名為 `YYYY-MM-DD-SLUG.md`（今天的日期），帶 `draft: true`
+且無 date 欄位。檔名裡的日期只是建立日期；發布時的日期以
+frontmatter 為準。
+
+### publish
+
+發布草稿：補上日期、去掉草稿標記，原地完成。
+
+```
+burogu publish SLUG
+```
+
+`SLUG`  文章 slug
+
+日期取 frontmatter 已有的 `date:`，沒有則用今天；`draft: true`
+變為 `draft: false` 並正規化 frontmatter。檔名不變。slug 不存在
+或檔案不是草稿時報錯。
 
 ### deploy
 

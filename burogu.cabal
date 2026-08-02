@@ -22,7 +22,7 @@ executable burogu
                     , Frontmatter
                     , Html
                     , Init
-                    , NewPost
+                    , Posts
                     , Page
                     , Pandoc
                     , Paths_burogu
@@ -73,7 +73,7 @@ test-suite burogu-test
                     , Frontmatter
                     , Html
                     , Init
-                    , NewPost
+                    , Posts
                     , Page
                     , Pandoc
                     , Paths_burogu

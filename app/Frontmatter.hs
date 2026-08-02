@@ -37,14 +37,20 @@ normalizeFrontmatter :: Kind -> FilePath -> Text -> Either Text (Text, [Text])
 normalizeFrontmatter kind filename block = do
     object <- case decodeEither' (encodeUtf8 block) of
         Right (Object o) -> pure o
+        Right Null -> Right mempty
         Right _ -> Left "frontmatter is not a YAML mapping"
-        Left _ -> Right mempty
+        Left err -> Left ("frontmatter is not valid YAML: " <> T.pack (show err))
     case kind of
         PostKind -> normalizePost object
         PageKind -> normalizePage object
   where
     name = T.pack (takeFileName filename)
-    slug = fromMaybe name (T.stripSuffix ".md" name)
+    base = fromMaybe name (T.stripSuffix ".md" name)
+    slug = fromMaybe base (stripDatePrefix base)
+    stripDatePrefix :: Text -> Maybe Text
+    stripDatePrefix n = case prefixDate n of
+        Just d -> T.stripPrefix (d <> "-") n
+        Nothing -> Nothing
 
     normalizePost :: KM.KeyMap Value -> Either Text (Text, [Text])
     normalizePost object = do

@@ -5,7 +5,7 @@ import Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig)
 import Control.Exception (IOException, try)
 import Css (FontFile (..), Fonts (..), TokenColor (..), ariaPreset, emptyFonts, renderCss, tokenColors)
 import Data.ByteString qualified as BS
-import Data.Either (isLeft)
+import Data.Either (isLeft, isRight)
 import Data.List (sort)
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -24,12 +24,13 @@ import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
 import Paths_burogu (getDataFileName)
 import Post (Post (..), mathMethod, parsePost, warnCaseTags)
+import Posts (runDraft, runNew, runPublish)
 import Registry (SitePages (..), classifyPages, navItems)
 import Search (renderSearch, renderSearchIndex)
 import Shaft (presetByName, presetNames, shaftPreset)
 import Site (BuildReport (..), build)
 import Sitemap (renderSitemap)
-import System.Directory (createDirectoryIfMissing, doesFileExist)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removePathForcibly)
 import System.Exit (ExitCode)
 import Template (ConfigValues (..), defaultConfigTemplate, emptyConfigValues, renderConfig)
 import Test.Tasty (TestTree, defaultMain, testGroup)
@@ -166,6 +167,15 @@ tests =
         , manualsPresent
         , frontmatterSplit
         , frontmatterPostDefaults
+        , frontmatterEmptyFilled
+        , frontmatterMalformedErrors
+        , postsDraftCreatesDatedFile
+        , postsNewCreatesDatedPost
+        , postsSlugDuplicateRejected
+        , postsPublishPromotes
+        , postsPublishNonDraftRejected
+        , postsPublishMissingRejected
+        , postsPublishLegacyDraft
         , frontmatterPageDefaults
         , frontmatterNoDateError
         , frontmatterDraftNoDate
@@ -176,6 +186,103 @@ tests =
         , formatWritesFile
         , formatDryRunDoesNotWrite
         ]
+
+postsDraftCreatesDatedFile :: TestTree
+postsDraftCreatesDatedFile =
+    testCase "drafts get a canonical dated filename" $ do
+        removePathForcibly "/tmp/burogu-test/posts"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts/_post"
+        result <- runDraft "/tmp/burogu-test/posts/_post" "notes"
+        case result of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right path -> do
+                files <- listDirectory "/tmp/burogu-test/posts/_post"
+                assertBool "dated file" (any (T.isSuffixOf "-notes.md" . T.pack) files)
+                content <- readFile path
+                assertBool "draft flag" ("draft: true" `textIn` T.pack content)
+                assertBool "no date" ("date:" `notTextIn` T.pack content)
+
+postsNewCreatesDatedPost :: TestTree
+postsNewCreatesDatedPost =
+    testCase "new posts carry today's date" $ do
+        removePathForcibly "/tmp/burogu-test/posts-new"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-new/_post"
+        result <- runNew "/tmp/burogu-test/posts-new/_post" "hello"
+        case result of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right path -> do
+                content <- readFile path
+                assertBool "date field" ("date: " `textIn` T.pack content)
+                assertBool "not a draft" ("draft: true" `notTextIn` T.pack content)
+
+postsSlugDuplicateRejected :: TestTree
+postsSlugDuplicateRejected =
+    testCase "new refuses a slug that already exists" $ do
+        removePathForcibly "/tmp/burogu-test/posts-dup"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-dup/_post"
+        first <- runNew "/tmp/burogu-test/posts-dup/_post" "hello"
+        second <- runNew "/tmp/burogu-test/posts-dup/_post" "hello"
+        assertBool "first ok" (isRight first)
+        assertBool "second rejected" (isLeft second)
+
+postsPublishPromotes :: TestTree
+postsPublishPromotes =
+    testCase "publish adds the date and drops the draft flag in place" $ do
+        removePathForcibly "/tmp/burogu-test/posts-pub"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-pub/_post"
+        writeFile "/tmp/burogu-test/posts-pub/_post/2026-08-01-notes.md" "---\ntitle: notes\ntags: [essay]\ndraft: true\n---\n\nbody\n"
+        result <- runPublish "/tmp/burogu-test/posts-pub/_post" "notes"
+        case result of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right path -> do
+                assertEqual "filename unchanged" "/tmp/burogu-test/posts-pub/_post/2026-08-01-notes.md" path
+                content <- readFile path
+                assertBool "date added" ("date: " `textIn` T.pack content)
+                assertBool "draft gone" ("draft: false" `textIn` T.pack content)
+                assertBool "draft true gone" ("draft: true" `notTextIn` T.pack content)
+                assertBool "tags kept" ("tags: [essay]" `textIn` T.pack content)
+
+postsPublishNonDraftRejected :: TestTree
+postsPublishNonDraftRejected =
+    testCase "publish rejects a regular post" $ do
+        removePathForcibly "/tmp/burogu-test/posts-reg"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-reg/_post"
+        writeFile "/tmp/burogu-test/posts-reg/_post/2026-08-01-notes.md" "---\ntitle: notes\n---\n\nbody\n"
+        result <- runPublish "/tmp/burogu-test/posts-reg/_post" "notes"
+        assertBool "rejected" (isLeft result)
+
+postsPublishMissingRejected :: TestTree
+postsPublishMissingRejected =
+    testCase "publish rejects a missing slug" $ do
+        removePathForcibly "/tmp/burogu-test/posts-none"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-none/_post"
+        result <- runPublish "/tmp/burogu-test/posts-none/_post" "nope"
+        assertBool "rejected" (isLeft result)
+
+postsPublishLegacyDraft :: TestTree
+postsPublishLegacyDraft =
+    testCase "publish handles legacy undated drafts" $ do
+        removePathForcibly "/tmp/burogu-test/posts-legacy"
+        createDirectoryIfMissing True "/tmp/burogu-test/posts-legacy/_post"
+        writeFile "/tmp/burogu-test/posts-legacy/_post/old.md" "---\ntitle: old\ndraft: true\n---\n\nbody\n"
+        result <- runPublish "/tmp/burogu-test/posts-legacy/_post" "old"
+        case result of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right path -> do
+                assertEqual "filename unchanged" "/tmp/burogu-test/posts-legacy/_post/old.md" path
+                content <- readFile path
+                assertBool "date added" ("date: " `textIn` T.pack content)
+                assertBool "draft gone" ("draft: true" `notTextIn` T.pack content)
+
+formatDryRunDoesNotWrite :: TestTree
+formatDryRunDoesNotWrite =
+    testCase "dry-run leaves files untouched" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/fmt-dry/_post"
+        writeFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md" "---\ntitle: Hello\n---\n\nbody\n"
+        result <- formatOne True "/tmp/burogu-test/fmt-dry/_post" PostKind "2026-08-01-hello.md"
+        assertEqual "no errors" False result
+        content <- readFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md"
+        assertEqual "untouched" "---\ntitle: Hello\n---\n\nbody\n" (T.pack content)
 
 fullFrontmatter :: TestTree
 fullFrontmatter =
@@ -1370,6 +1477,21 @@ frontmatterSplit =
         assertEqual "without frontmatter" (Nothing, "no fm\n") (splitFrontmatter "no fm\n")
         assertEqual "unclosed" (Nothing, "---\ntitle: X\n") (splitFrontmatter "---\ntitle: X\n")
 
+frontmatterEmptyFilled :: TestTree
+frontmatterEmptyFilled =
+    testCase "files without frontmatter get one filled in" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertEqual "post defaults" "title: hello\ndate: 2026-08-01\ntags: []\ndraft: false\n" fm
+        case normalizeFrontmatter PageKind "/tmp/x/about.md" "" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _) -> assertEqual "page defaults" "title: about\npriority: 100\nhiddenInNavbar: false\n" fm
+
+frontmatterMalformedErrors :: TestTree
+frontmatterMalformedErrors =
+    testCase "malformed frontmatter is a hard error" $ do
+        assertBool "error" (isLeft (normalizeFrontmatter PageKind "/tmp/x/p.md" "title: [unclosed\n"))
+
 frontmatterPostDefaults :: TestTree
 frontmatterPostDefaults =
     testCase "posts get every field with defaults" $ do
@@ -1454,13 +1576,3 @@ formatWritesFile =
         assertEqual "no errors" False result
         content <- readFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md"
         assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\n---\n\nbody\n" (T.pack content)
-
-formatDryRunDoesNotWrite :: TestTree
-formatDryRunDoesNotWrite =
-    testCase "dry-run leaves files untouched" $ do
-        createDirectoryIfMissing True "/tmp/burogu-test/fmt-dry/_post"
-        writeFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md" "---\ntitle: Hello\n---\n\nbody\n"
-        result <- formatOne True "/tmp/burogu-test/fmt-dry/_post" PostKind "2026-08-01-hello.md"
-        assertEqual "no errors" False result
-        content <- readFile "/tmp/burogu-test/fmt-dry/_post/2026-08-01-hello.md"
-        assertEqual "untouched" "---\ntitle: Hello\n---\n\nbody\n" (T.pack content)
