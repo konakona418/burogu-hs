@@ -322,6 +322,8 @@ baseRules = do
         "cursor" C.-: "pointer"
         "font-family" C.-: "var(--font-family)"
         "line-height" C.-: "var(--line-height)"
+        C.display C.flex
+        "align-items" C.-: "center"
     C.code C.? do
         "background-color" C.-: "var(--color-code-bg)"
         C.paddingLeft (C.px 4)

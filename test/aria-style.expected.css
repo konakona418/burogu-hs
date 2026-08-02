@@ -208,6 +208,8 @@ time
   cursor      : pointer;
   font-family : var(--font-family);
   line-height : var(--line-height);
+  display     : flex;
+  align-items : center;
 }
 
 code
