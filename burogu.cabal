@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            burogu
-version:         0.1.0.0
+version:         0.2.0.0
 license:         AGPL-3.0-or-later
 license-file:    LICENSE
 maintainer:      creeperblin@outlook.com

@@ -1,9 +1,10 @@
 # Maintainer: moe li <creeperblin@outlook.com>
 #
 # Build a source tarball first (from the repo root):
-#   git archive --format=tar.gz --prefix=burogu-0.1.0.0/ -o packaging/burogu-0.1.0.0.tar.gz HEAD
+#   git archive --format=tar.gz --prefix=burogu-0.2.0.0/ -o packaging/burogu-0.2.0.0.tar.gz HEAD
 # (or, before committing: tar --exclude=.git --exclude=dist-newstyle --exclude=site \
-#     -czf packaging/burogu-0.1.0.0.tar.gz --transform 's,^,burogu-0.1.0.0/,' app test burogu.cabal config.yaml)
+#     -czf packaging/burogu-0.2.0.0.tar.gz --transform 's,^,burogu-0.2.0.0/,' \
+#     app test docs js i18n burogu.cabal config.yaml)
 # Then, inside packaging/: makepkg -i
 #
 # GHC from ghcup: ghc and cabal-install are not pacman packages, so
@@ -17,7 +18,7 @@
 # built-in HTTP server.
 
 pkgname=burogu
-pkgver=0.1.0.0
+pkgver=0.2.0.0
 pkgrel=1
 pkgdesc="A static blog generator written in Haskell"
 arch=('x86_64')
