@@ -787,6 +787,11 @@ mark
   display : none;
 }
 
+.theme-toggle
+{
+  display : none;
+}
+
 }
 
 /* Generated with Clay, http://fvisser.nl/clay */

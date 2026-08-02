@@ -470,6 +470,7 @@ printRules =
         C.mark C.? ("background-color" C.-: "transparent")
         (".copy-button" :: C.Selector) C.? C.display C.none
         (".code-lang" :: C.Selector) C.? C.display C.none
+        (".theme-toggle" :: C.Selector) C.? C.display C.none
 
 tokenRules :: C.Css
 tokenRules = mapM_ tokenRule tokenColors

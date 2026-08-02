@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
  var svgAttrs = 'xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
  var copySvg = '<svg ' + svgAttrs + '><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
  var checkSvg = '<svg ' + svgAttrs + '><polyline points="20 6 9 17 4 12"/></svg>';
+ var xSvg = '<svg ' + svgAttrs + '><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
  var blocks = document.querySelectorAll("pre > code.sourceCode");
  blocks.forEach(function (code) {
   var pre = code.parentElement;
@@ -38,11 +39,17 @@ document.addEventListener("DOMContentLoaded", function () {
   button.setAttribute("aria-label", "Copy code");
   button.innerHTML = copySvg;
   button.addEventListener("click", function () {
+   var fail = function () {
+    button.innerHTML = xSvg;
+    setTimeout(function () { button.innerHTML = copySvg; }, 800);
+   };
    if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(code.textContent).then(function () {
      button.innerHTML = checkSvg;
      setTimeout(function () { button.innerHTML = copySvg; }, 800);
-    }, function () {});
+    }, fail);
+   } else {
+    fail();
    }
   });
   pre.appendChild(button);

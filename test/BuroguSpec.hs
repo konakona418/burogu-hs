@@ -504,6 +504,8 @@ themeToggleScriptInjected =
         let page = renderHtml (renderIndex testConfig [] Nothing [])
         assertBool "script" ("burogu-theme" `textIn` page)
         assertBool "footer target" ("site-footer" `textIn` page)
+        assertBool "button rendered" ("theme-toggle" `textIn` page)
+        assertBool "localized label" ("aria-label=\"切换暗色模式\"" `textIn` page)
 
 formatDryRunDoesNotWrite :: TestTree
 formatDryRunDoesNotWrite =

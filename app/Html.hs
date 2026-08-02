@@ -48,9 +48,11 @@ layout cfg navPages meta body =
                         L.a_ [L.class_ "site-name", L.href_ "/"] (L.toHtml (siteName cfg))
                         mapM_ renderNavPage navPages
                     L.main_ body
-                    L.footer_ [L.class_ "site-footer"] $ L.p_ $ do
-                        L.toHtml (siteCopyright cfg)
-                        maybe (pure ()) renderCredit (siteGeneratedBy cfg)
+                    L.footer_ [L.class_ "site-footer"] $ do
+                        L.p_ $ do
+                            L.toHtml (siteCopyright cfg)
+                            maybe (pure ()) renderCredit (siteGeneratedBy cfg)
+                        L.button_ [L.class_ "theme-toggle", L.type_ "button", LB.makeAttribute "aria-label" (t (fromSiteLang (siteLang cfg)) "themeToggle")] mempty
             )
   where
     renderCredit :: Text -> L.Html ()
