@@ -210,7 +210,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 `--dry-run`  show what would change without writing anything
 
-Posts get `title, date, tags, description, draft` (the date comes
+Posts get `title, date, tags, description, draft, toc` (the date comes
 from the filename prefix when the frontmatter has none; drafts may
 omit it). Pages get `title, priority, hiddenInNavbar, redirectAs`.
 Empty `description`/`redirectAs` fields are not written. Unknown
@@ -298,8 +298,8 @@ back to the preset's defaults:
                defaults to a serif stack)
 `body`         font stack for body text (list of names; shaft
                defaults to a serif stack)
-`code`         font stack for code (list of names; default: the
-               browser's monospace)
+`code`         font stack for code (list of names; default: a
+               cross-platform monospace stack)
 `size`         base font size, e.g. `17px`
 `lineHeight`   base line height, e.g. `28px`
 `files`        embedded font files (see below)

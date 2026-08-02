@@ -5,6 +5,11 @@ document.addEventListener("DOMContentLoaded", function () {
  }
  var input = document.querySelector(".search-input");
  var list = document.getElementById("search-results");
+ var noResults = document.querySelector(".search-no-results");
+ function showResults(found) {
+  if (found) { noResults.setAttribute("hidden", ""); }
+  else { noResults.removeAttribute("hidden"); }
+ }
  function highlight(node, text, q) {
   var lower = text.toLowerCase();
   var i = lower.indexOf(q);
@@ -28,10 +33,12 @@ document.addEventListener("DOMContentLoaded", function () {
   input.addEventListener("input", function () {
    var q = input.value.trim().toLowerCase();
    while (list.firstChild) { list.removeChild(list.firstChild); }
-   if (!q) { return; }
+   if (!q) { showResults(true); return; }
+   var found = false;
    index.forEach(function (entry) {
     var hay = (entry.title + " " + entry.text).toLowerCase();
     if (hay.indexOf(q) === -1) { return; }
+    found = true;
     var li = document.createElement("li");
     li.className = "post-item";
     if (entry.date) {
@@ -50,6 +57,7 @@ document.addEventListener("DOMContentLoaded", function () {
     li.appendChild(p);
     list.appendChild(li);
    });
+   showResults(found);
   });
  });
 });

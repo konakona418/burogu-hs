@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Html (PageMeta (..), groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix, katexScript) where
+module Html (PageMeta (..), codeScript, groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix, katexScript) where
 
 import Config (SiteConfig (..), Theme (..))
 import Control.Monad (when)
@@ -41,6 +41,7 @@ layout cfg navPages meta body =
                     renderMath cfg meta
                     renderExtraJs cfg
                     L.script_ (themeScript :: Text)
+                    L.script_ (codeScript :: Text)
                     L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
@@ -91,6 +92,9 @@ katexScript = decodeUtf8 $(embedFile "js/katex.js")
 
 themeScript :: Text
 themeScript = decodeUtf8 $(embedFile "js/theme.js")
+
+codeScript :: Text
+codeScript = decodeUtf8 $(embedFile "js/code.js")
 
 renderNavPage :: (Text, Text) -> L.Html ()
 renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
@@ -188,7 +192,7 @@ renderToc :: [TocEntry] -> L.Html ()
 renderToc entries = L.nav_ [L.class_ "toc"] $ L.ul_ $ mapM_ item entries
   where
     item :: TocEntry -> L.Html ()
-    item entry = L.li_ $ L.a_ [L.href_ ("#" <> tocId entry)] (L.toHtml (tocTitle entry))
+    item entry = L.li_ [L.class_ ("toc-level-" <> T.pack (show (tocLevel entry)))] $ L.a_ [L.href_ ("#" <> tocId entry)] (L.toHtml (tocTitle entry))
 
 renderPostNav :: SiteConfig -> (Maybe Post, Maybe Post) -> L.Html ()
 renderPostNav cfg (prev, next) = case (prev, next) of

@@ -48,6 +48,7 @@ no-op when a user script (e.g. theme.extraJs) defines window.buroguSearch.
 renderSearch :: SiteConfig -> [(Text, Text)] -> Text -> L.Html ()
 renderSearch cfg navPages title = H.layout cfg navPages pageMeta $ do
     L.input_ [L.class_ "search-input", L.type_ "search", LB.makeAttribute "placeholder" (t (fromSiteLang (siteLang cfg)) "searchPlaceholder"), LB.makeAttribute "autofocus" ""]
+    L.p_ [L.class_ "search-no-results", LB.makeAttribute "hidden" ""] (L.toHtml (t (fromSiteLang (siteLang cfg)) "noResults"))
     L.ul_ [L.class_ "post-list", L.id_ "search-results"] (pure ())
     L.script_ (searchScript :: Text)
   where

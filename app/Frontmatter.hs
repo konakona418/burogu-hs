@@ -59,6 +59,7 @@ normalizeFrontmatter kind filename block = do
         tags <- tagsField object
         mDescription <- strOpt "description" object
         draft <- boolOpt "draft" object
+        toc <- boolOpt "toc" object
         let date = case mDate of
                 Just d -> Just d
                 Nothing -> prefixDate name
@@ -71,7 +72,8 @@ normalizeFrontmatter kind filename block = do
                                 <> [("tags", tags)]
                                 <> maybe [] (\d -> [("description", d)]) mDescription
                                 <> [("draft", showBool draft)]
-                 in Right (render (known <> unknownPairs object ["title", "date", "tags", "description", "draft"]), unknownKeys object ["title", "date", "tags", "description", "draft"])
+                                <> [("toc", showBool toc)]
+                 in Right (render (known <> unknownPairs object ["title", "date", "tags", "description", "draft", "toc"]), unknownKeys object ["title", "date", "tags", "description", "draft", "toc"])
 
     normalizePage :: KM.KeyMap Value -> Either Text (Text, [Text])
     normalizePage object = do

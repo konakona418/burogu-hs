@@ -196,7 +196,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 `--dry-run`  只展示將寫內容，不落盤
 
-文章得到 `title, date, tags, description, draft`（frontmatter 沒有
+文章得到 `title, date, tags, description, draft, toc`（frontmatter 沒有
 日期時從檔案名稱前綴取；草稿可省略日期）。頁面得到 `title,
 priority, hiddenInNavbar, redirectAs`。空的 `description`/
 `redirectAs` 不寫入。未知 frontmatter 鍵保留（依字典序）並警告；
@@ -271,7 +271,7 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 `body`         正文字型堆疊（名稱清單；shaft 預設用襯線堆疊）
 `display`      標題/日期/年份的展示字型堆疊（名稱清單；shaft 預設
                用襯線堆疊）
-`code`         程式碼字型堆疊（名稱清單；預設：瀏覽器等寬字型）
+`code`         程式碼字型堆疊（名稱清單；預設：跨平台等寬堆疊）
 `size`         基礎字級，如 `17px`
 `lineHeight`   基礎行高，如 `28px`
 `files`        內嵌字型檔案（見下）

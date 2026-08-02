@@ -1,4 +1,4 @@
-module Css (FontFile (..), Fonts (..), Preset (..), TokenColor (..), ariaPreset, emptyFonts, renderCss, tokenColors) where
+module Css (FontFile (..), Fonts (..), Preset (..), TokenColor (..), ariaPreset, codeFontStack, emptyFonts, renderCss, tokenColors) where
 
 import Clay qualified as C
 import Clay.Flexbox qualified as CF
@@ -121,8 +121,14 @@ ariaPreset =
         , presetDarkTokens = darkTokenValues <> [("token-" <> tcClass tc, tcDark tc) | tc <- tokenColors]
         , presetRules = tagGradient
         , presetDisplayFont = Nothing
-        , presetCodeFont = Nothing
+        , presetCodeFont = Just codeFontStack
         }
+
+{- | The cross-platform monospace stack, so code looks the same in
+every browser (ui-monospace, SF Mono/Menlo, Consolas, Liberation Mono).
+-}
+codeFontStack :: [Text]
+codeFontStack = ["ui-monospace", "SF Mono", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "monospace"]
 
 renderCss :: Preset -> Fonts -> [Text] -> Text
 renderCss preset fonts extraCss =
@@ -338,19 +344,73 @@ baseRules = do
         "align-items" C.-: "center"
     C.code C.? do
         "background-color" C.-: "var(--color-code-bg)"
+        "font-family" C.-: "var(--font-code)"
         C.paddingLeft (C.px 4)
         C.paddingRight (C.px 4)
         C.borderRadius (C.px 3) (C.px 3) (C.px 3) (C.px 3)
     C.pre C.? do
         "background-color" C.-: "var(--color-code-bg)"
-        C.padding (C.px 12) (C.px 16) (C.px 12) (C.px 16)
+        "font-family" C.-: "var(--font-code)"
+        C.padding (C.px 32) (C.px 16) (C.px 12) (C.px 16)
         C.borderRadius (C.px 4) (C.px 4) (C.px 4) (C.px 4)
         C.overflowX C.scroll
-    C.pre C.? C.code C.? ("background-color" C.-: "transparent")
+        "position" C.-: "relative"
+    C.pre C.? C.code C.? do
+        "background-color" C.-: "transparent"
+        "padding" C.-: "0"
+    (".code-lang" :: C.Selector) C.? do
+        "position" C.-: "absolute"
+        "top" C.-: "10px"
+        "left" C.-: "12px"
+        "font-size" C.-: "0.8em"
+        "line-height" C.-: "1"
+        "color" C.-: "var(--color-muted)"
+        "letter-spacing" C.-: "0.06em"
+        "pointer-events" C.-: "none"
+    (".copy-button" :: C.Selector) C.? do
+        "position" C.-: "absolute"
+        "top" C.-: "8px"
+        "right" C.-: "12px"
+        "border" C.-: "none"
+        "background" C.-: "none"
+        "color" C.-: "var(--color-muted)"
+        "cursor" C.-: "pointer"
+        "padding" C.-: "0"
+        C.display C.flex
+        "align-items" C.-: "center"
+    (".copy-button" :: C.Selector) C.# C.hover C.? ("color" C.-: "var(--color-text)")
     (".post-list" :: C.Selector) C.? C.listStyleType C.none
     (".tag-list" :: C.Selector) C.? C.listStyleType C.none
     ("#search-results" :: C.Selector) C.? C.listStyleType C.none
     (".toc > ul" :: C.Selector) C.? C.listStyleType C.none
+    (".toc" :: C.Selector) C.? do
+        "font-size" C.-: "0.9em"
+        "margin-bottom" C.-: "var(--space-nav-gap)"
+        "padding" C.-: "0"
+    (".toc a" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
+    (".toc li" :: C.Selector) C.? ("padding-left" C.-: "calc((var(--toc-depth) - 1) * 12px)")
+    (".toc .toc-level-1" :: C.Selector) C.? ("--toc-depth" C.-: "1")
+    (".toc .toc-level-2" :: C.Selector) C.? ("--toc-depth" C.-: "2")
+    (".toc .toc-level-3" :: C.Selector) C.? ("--toc-depth" C.-: "3")
+    (".toc .toc-level-4" :: C.Selector) C.? ("--toc-depth" C.-: "4")
+    (".toc .toc-level-5" :: C.Selector) C.? ("--toc-depth" C.-: "5")
+    (".toc .toc-level-6" :: C.Selector) C.? ("--toc-depth" C.-: "6")
+    C.table C.? C.borderCollapse C.collapse
+    C.th C.? do
+        "border" C.-: "1px solid var(--color-muted)"
+        "padding" C.-: "6px 10px"
+        "font-weight" C.-: "600"
+        "text-align" C.-: "left"
+    C.td C.? do
+        "border" C.-: "1px solid var(--color-muted)"
+        "padding" C.-: "6px 10px"
+    C.figcaption C.? do
+        "color" C.-: "var(--color-muted)"
+        "font-size" C.-: "0.85em"
+        "text-align" C.-: "center"
+        "margin-top" C.-: "4px"
+    (".post-meta-time" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
+    (".search-no-results" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
     C.li C.? ("margin-bottom" C.-: "var(--space-list-gap)")
     C.blockquote C.? do
         "border-left" C.-: "3px solid var(--color-muted)"
@@ -408,6 +468,8 @@ printRules =
         C.a C.? ("color" C.-: "#000000")
         C.nav C.? C.display C.none
         C.mark C.? ("background-color" C.-: "transparent")
+        (".copy-button" :: C.Selector) C.? C.display C.none
+        (".code-lang" :: C.Selector) C.? C.display C.none
 
 tokenRules :: C.Css
 tokenRules = mapM_ tokenRule tokenColors

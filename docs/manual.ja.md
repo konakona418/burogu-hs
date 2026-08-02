@@ -214,7 +214,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 `--dry-run`  書き込まずに変更内容だけを表示する
 
-記事には `title, date, tags, description, draft` が付きます
+記事には `title, date, tags, description, draft, toc` が付きます
 （frontmatter に日付がない場合はファイル名プレフィックスから
 取得。下書きは日付を省略可）。ページには `title, priority,
 hiddenInNavbar, redirectAs` が付きます。空の `description`/
@@ -306,7 +306,7 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 `display`      見出し・日付・年の表示用フォントスタック（名前
                リスト。shaft はデフォルトでセリフスタック）
 `code`         コード用フォントスタック（名前リスト。デフォルト：
-               ブラウザの等幅フォント）
+               クロスプラットフォームの等幅スタック）
 `size`         基本フォントサイズ（例：`17px`）
 `lineHeight`   基本行の高さ（例：`28px`）
 `files`        埋め込みフォントファイル（下記参照）

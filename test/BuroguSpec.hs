@@ -193,6 +193,12 @@ tests =
         , i18nFromSiteLang
         , i18nPlaceholders
         , i18nPageOutput
+        , formatTocKey
+        , tocLevelClasses
+        , contentElementStyles
+        , searchNoResults
+        , codeScriptInjected
+        , codeBlockStyles
         , frontmatterPageDefaults
         , frontmatterNoDateError
         , frontmatterDraftNoDate
@@ -354,6 +360,56 @@ postNavSingleSide =
         let css = renderCss ariaPreset emptyFonts []
         assertBool "separator" (".post-nav" `textIn` css)
         assertBool "push-right rule" (".post-nav-next" `textIn` css)
+
+formatTocKey :: TestTree
+formatTocKey =
+    testCase "format recognizes the toc key" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-t.md" "title: X\ntoc: true\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, unknown) -> do
+                assertEqual "toc kept" "title: X\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: true\n" fm
+                assertEqual "not unknown" [] unknown
+
+tocLevelClasses :: TestTree
+tocLevelClasses =
+    testCase "toc entries carry level classes" $ do
+        let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
+            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+        assertBool "level class" ("toc-level-2" `textIn` page)
+
+contentElementStyles :: TestTree
+contentElementStyles =
+    testCase "content elements get their styles" $ do
+        let css = renderCss ariaPreset emptyFonts []
+        assertBool "toc depth" ("--toc-depth" `textIn` css)
+        assertBool "table border" ("border-collapse : collapse" `textIn` css)
+        assertBool "figcaption" ("figcaption" `textIn` css)
+        assertBool "reading time muted" (".post-meta-time" `textIn` css)
+
+searchNoResults :: TestTree
+searchNoResults =
+    testCase "the search page ships a no-results hint" $ do
+        let page = renderHtml (renderSearch testConfig [] "搜索")
+        assertBool "hint element" ("search-no-results" `textIn` page)
+        assertBool "hidden initially" ("hidden" `textIn` page)
+        assertBool "script toggles it" ("showResults" `textIn` page)
+
+codeScriptInjected :: TestTree
+codeScriptInjected =
+    testCase "every page ships the code-block script" $ do
+        let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags []))
+        assertBool "copy logic" ("copy-button" `textIn` page)
+        assertBool "lang extraction" ("langNames" `textIn` page)
+        assertBool "clipboard" ("clipboard" `textIn` page)
+
+codeBlockStyles :: TestTree
+codeBlockStyles =
+    testCase "code blocks carry copy and lang styles" $ do
+        let css = renderCss ariaPreset emptyFonts []
+        assertBool "lang label" (".code-lang" `textIn` css)
+        assertBool "copy button" (".copy-button" `textIn` css)
+        assertBool "relative anchor" ("position" `textIn` css && "relative" `textIn` css)
+        assertBool "print hides tools" ("@media print" `textIn` css)
 
 i18nCompleteness :: TestTree
 i18nCompleteness =
@@ -1652,7 +1708,7 @@ frontmatterEmptyFilled =
     testCase "files without frontmatter get one filled in" $ do
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "post defaults" "title: hello\ndate: 2026-08-01\ntags: []\ndraft: false\n" fm
+            Right (fm, _) -> assertEqual "post defaults" "title: hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n" fm
         case normalizeFrontmatter PageKind "/tmp/x/about.md" "" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
             Right (fm, _) -> assertEqual "page defaults" "title: about\npriority: 100\nhiddenInNavbar: false\n" fm
@@ -1668,7 +1724,7 @@ frontmatterPostDefaults =
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "title: Post\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
             Right (fm, unknown) -> do
-                assertEqual "canonical order" "title: Post\ndate: 2026-08-01\ntags: []\ndraft: false\n" fm
+                assertEqual "canonical order" "title: Post\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n" fm
                 assertEqual "no unknown keys" [] unknown
 
 frontmatterPageDefaults :: TestTree
@@ -1688,7 +1744,7 @@ frontmatterDraftNoDate =
     testCase "a draft without a date omits the date key" $ do
         case normalizeFrontmatter PostKind "/tmp/x/draft.md" "title: X\ndraft: true\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "no date key" "title: X\ntags: []\ndraft: true\n" fm
+            Right (fm, _) -> assertEqual "no date key" "title: X\ntags: []\ndraft: true\ntoc: false\n" fm
 
 frontmatterUnknownKeys :: TestTree
 frontmatterUnknownKeys =
@@ -1707,7 +1763,7 @@ frontmatterDescriptionOmitted =
             Right (fm, _) -> assertBool "no description" ("description" `notTextIn` fm)
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-p.md" "title: X\ndescription: Hello\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "description written" "title: X\ndate: 2026-08-01\ntags: []\ndescription: Hello\ndraft: false\n" fm
+            Right (fm, _) -> assertEqual "description written" "title: X\ndate: 2026-08-01\ntags: []\ndescription: Hello\ndraft: false\ntoc: false\n" fm
 
 configTemplateGolden :: TestTree
 configTemplateGolden =
@@ -1745,4 +1801,4 @@ formatWritesFile =
         result <- formatOne False "/tmp/burogu-test/fmt-write/_post" PostKind "2026-08-01-hello.md"
         assertEqual "no errors" False result
         content <- readFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md"
-        assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\n---\n\nbody\n" (T.pack content)
+        assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n---\n\nbody\n" (T.pack content)

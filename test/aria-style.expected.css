@@ -47,6 +47,7 @@
   --token-va         : #000000;
   --token-vs         : #4e9a06;
   --token-wa         : #8f5902;
+  --font-code        : ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 html[data-theme="dark"]
@@ -206,6 +207,7 @@ time
 code
 {
   background-color : var(--color-code-bg);
+  font-family      : var(--font-code);
   padding-left     : 4px;
   padding-right    : 4px;
   border-radius    : 3px 3px 3px 3px;
@@ -214,15 +216,49 @@ code
 pre
 {
   background-color : var(--color-code-bg);
-  padding          : 12px 16px 12px 16px;
+  font-family      : var(--font-code);
+  padding          : 32px 16px 12px 16px;
   border-radius    : 4px 4px 4px 4px;
   overflow-x       : scroll;
+  position         : relative;
 }
 
 
 pre code
 {
   background-color : transparent;
+  padding          : 0;
+}
+
+.code-lang
+{
+  position       : absolute;
+  top            : 10px;
+  left           : 12px;
+  font-size      : 0.8em;
+  line-height    : 1;
+  color          : var(--color-muted);
+  letter-spacing : 0.06em;
+  pointer-events : none;
+}
+
+.copy-button
+{
+  position    : absolute;
+  top         : 8px;
+  right       : 12px;
+  border      : none;
+  background  : none;
+  color       : var(--color-muted);
+  cursor      : pointer;
+  padding     : 0;
+  display     : flex;
+  align-items : center;
+}
+
+.copy-button:hover
+{
+  color : var(--color-text);
 }
 
 .post-list
@@ -243,6 +279,90 @@ pre code
 .toc > ul
 {
   list-style-type : none;
+}
+
+.toc
+{
+  font-size     : 0.9em;
+  margin-bottom : var(--space-nav-gap);
+  padding       : 0;
+}
+
+.toc a
+{
+  color : var(--color-muted);
+}
+
+.toc li
+{
+  padding-left : calc((var(--toc-depth) - 1) * 12px);
+}
+
+.toc .toc-level-1
+{
+  --toc-depth : 1;
+}
+
+.toc .toc-level-2
+{
+  --toc-depth : 2;
+}
+
+.toc .toc-level-3
+{
+  --toc-depth : 3;
+}
+
+.toc .toc-level-4
+{
+  --toc-depth : 4;
+}
+
+.toc .toc-level-5
+{
+  --toc-depth : 5;
+}
+
+.toc .toc-level-6
+{
+  --toc-depth : 6;
+}
+
+table
+{
+  border-collapse : collapse;
+}
+
+th
+{
+  border      : 1px solid var(--color-muted);
+  padding     : 6px 10px;
+  font-weight : 600;
+  text-align  : left;
+}
+
+td
+{
+  border  : 1px solid var(--color-muted);
+  padding : 6px 10px;
+}
+
+figcaption
+{
+  color      : var(--color-muted);
+  font-size  : 0.85em;
+  text-align : center;
+  margin-top : 4px;
+}
+
+.post-meta-time
+{
+  color : var(--color-muted);
+}
+
+.search-no-results
+{
+  color : var(--color-muted);
 }
 
 li
@@ -655,6 +775,16 @@ nav
 mark
 {
   background-color : transparent;
+}
+
+.copy-button
+{
+  display : none;
+}
+
+.code-lang
+{
+  display : none;
 }
 
 }

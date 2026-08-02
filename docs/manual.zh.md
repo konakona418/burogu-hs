@@ -196,7 +196,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 `--dry-run`  只展示将写内容，不落盘
 
-文章得到 `title, date, tags, description, draft`（frontmatter 没有
+文章得到 `title, date, tags, description, draft, toc`（frontmatter 没有
 日期时从文件名前缀取；草稿可省略日期）。页面得到 `title,
 priority, hiddenInNavbar, redirectAs`。空的 `description`/
 `redirectAs` 不写入。未知 frontmatter 键保留（按字典序）并警告；
@@ -270,7 +270,7 @@ burogu doc [SECTION] [--lang LANG] [--color MODE]
 
 `body`         正文字体栈（名称列表；shaft 默认用衬线栈）
 `display`      标题/日期/年份的展示字体栈（名称列表；shaft 默认用衬线栈）
-`code`         代码字体栈（名称列表；默认：浏览器等宽字体）
+`code`         代码字体栈（名称列表；默认：跨平台等宽栈）
 `size`         基础字号，如 `17px`
 `lineHeight`   基础行高，如 `28px`
 `files`        内嵌字体文件（见下）

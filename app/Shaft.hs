@@ -2,7 +2,7 @@ module Shaft (allPresets, presetByName, presetNames, shaftPreset) where
 
 import Clay qualified as C
 import Clay.Media qualified as CM
-import Css (Preset (..), TokenColor (..), ariaPreset, tokenColors)
+import Css (Preset (..), TokenColor (..), ariaPreset, codeFontStack, tokenColors)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 
@@ -28,7 +28,7 @@ shaftPreset =
         , presetDarkTokens = shaftDarkBaseTokens <> [("token-" <> tcClass tc, tcDark tc) | tc <- tokenColors]
         , presetRules = shaftRules
         , presetDisplayFont = Just shaftDisplayStack
-        , presetCodeFont = Nothing
+        , presetCodeFont = Just codeFontStack
         }
 
 shaftDisplayStack :: [Text]

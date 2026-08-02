@@ -1,3 +1,9 @@
+(function () {
+ var stored = localStorage.getItem("burogu-theme");
+ if (stored === "dark" || stored === "light") {
+  document.documentElement.setAttribute("data-theme", stored);
+ }
+})();
 document.addEventListener("DOMContentLoaded", function () {
  var stored = localStorage.getItem("burogu-theme");
  var button = document.createElement("button");
