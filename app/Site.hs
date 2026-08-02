@@ -15,6 +15,7 @@ import Lucid qualified as L
 import Page (CustomPage (..), loadPages)
 import Post (Post (..), mathMethod)
 import Registry (SitePages (..), classifyPages, defaultArchiveTitle, defaultSearchTitle, defaultTagsLabel, navItems, specialPages)
+import Scripts (runPageScripts)
 import Search (renderSearch, renderSearchIndex)
 import Shaft (presetByName)
 import Sitemap (renderSitemap)
@@ -59,26 +60,30 @@ buildWork paths config posts = do
     epages <- loadPages math pagesDir
     case epages of
         Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
-        Right pages -> case classifyPages pages of
-            Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
-            Right sp -> do
-                let nav = navItems sp
-                removePathForcibly (pOut paths)
-                createDirectoryIfMissing True (pOut paths)
-                TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
-                write404 paths config nav (sp404 sp)
-                writePages paths config nav (spNormal sp)
-                writeRedirects paths config (specialPages sp <> spRedirects sp)
-                writeStyleSheet paths config
-                mapM_ (writePost paths config nav posts) posts
-                writeTagPages paths config nav (spTags sp) posts
-                writeArchive paths config nav (spArchive sp) posts
-                writeSearch paths config nav sp posts
-                writeRobots paths config
-                brFeed <- writeFeed paths config posts
-                brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
-                nStatic <- copyStatic paths
-                pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap}
+        Right pages -> do
+            epages' <- runPageScripts paths config posts pages
+            case epages' of
+                Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
+                Right pages' -> case classifyPages pages' of
+                    Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
+                    Right sp -> do
+                        let nav = navItems sp
+                        removePathForcibly (pOut paths)
+                        createDirectoryIfMissing True (pOut paths)
+                        TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav (snd <$> spIndex sp) posts)))
+                        write404 paths config nav (sp404 sp)
+                        writePages paths config nav (spNormal sp)
+                        writeRedirects paths config (specialPages sp <> spRedirects sp)
+                        writeStyleSheet paths config
+                        mapM_ (writePost paths config nav posts) posts
+                        writeTagPages paths config nav (spTags sp) posts
+                        writeArchive paths config nav (spArchive sp) posts
+                        writeSearch paths config nav sp posts
+                        writeRobots paths config
+                        brFeed <- writeFeed paths config posts
+                        brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
+                        nStatic <- copyStatic paths
+                        pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap}
 
 write404 :: Paths -> SiteConfig -> [(Text, Text)] -> Maybe (Text, CustomPage) -> IO ()
 write404 paths config nav mEntry =

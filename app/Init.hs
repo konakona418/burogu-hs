@@ -40,6 +40,19 @@ aboutTemplate =
         , "Remove the file to drop the page (and its nav link) entirely."
         ]
 
+helloScriptTemplate :: Text
+helloScriptTemplate =
+    T.unlines
+        [ "# Example script for a script page. Reference it from a page's"
+        , "# frontmatter (`script: hello.d`); the string result becomes the"
+        , "# page body (raw HTML). Run `burogu doc` for the script language."
+        , ""
+        , "\"<h2>Hello #{get(site, \"siteName\")}!</h2>\""
+        , "  + \"<ul>\""
+        , "  + join(map(posts, { p -> \"<li>\" + get(p, \"title\") + \"</li>\" }), \"\")"
+        , "  + \"</ul>\""
+        ]
+
 notFoundTemplate :: Text
 notFoundTemplate =
     T.unlines
@@ -161,12 +174,14 @@ run target = do
     writeAll = do
         createDirectoryIfMissing True (target </> "_post")
         createDirectoryIfMissing True (target </> "_pages")
+        createDirectoryIfMissing True (target </> "_scripts")
         TIO.writeFile (target </> "_post" </> "2026-07-31-hello-world.md") samplePost
         TIO.writeFile (target </> "_pages" </> "404.md") notFoundTemplate
         TIO.writeFile (target </> "_pages" </> "about.md") aboutTemplate
         TIO.writeFile (target </> "_pages" </> "tags.md") tagsTemplate
         TIO.writeFile (target </> "_pages" </> "archive.md") archiveTemplate
         TIO.writeFile (target </> "_pages" </> "search.md") searchTemplate
+        TIO.writeFile (target </> "_scripts" </> "hello.d") helloScriptTemplate
         TIO.writeFile (target </> "CNAME") "example.com\n"
         TIO.writeFile (target </> "theme.css") themeCss
         writeConfig
@@ -177,6 +192,7 @@ run target = do
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/tags.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/archive.md")
         TIO.putStrLn ("  " <> T.pack target <> "/_pages/search.md")
+        TIO.putStrLn ("  " <> T.pack target <> "/_scripts/hello.d")
         TIO.putStrLn ("  " <> T.pack target <> "/CNAME")
         TIO.putStrLn ("  " <> T.pack target <> "/theme.css")
         TIO.putStrLn "edit config.yaml if needed, then run: cabal run burogu -- preview"

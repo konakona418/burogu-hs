@@ -29,12 +29,19 @@ executable burogu
                     , Paths_burogu
                     , Post
                     , Registry
+                    , Scripts
                     , Search
                     , Shaft
                     , Sitemap
                     , Site
                     , Sync
                     , Template
+                    , Builtins
+                    , Eval
+                    , Expr
+                    , Lexer
+                    , Parser
+                    , Value
                     , Watch
     hs-source-dirs:   app
     default-language: GHC2021
@@ -81,12 +88,19 @@ test-suite burogu-test
                     , Paths_burogu
                     , Post
                     , Registry
+                    , Scripts
                     , Search
                     , Shaft
                     , Sitemap
                     , Site
                     , Sync
                     , Template
+                    , Builtins
+                    , Eval
+                    , Expr
+                    , Lexer
+                    , Parser
+                    , Value
                     , Watch
     hs-source-dirs:   test
                     , app

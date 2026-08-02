@@ -81,13 +81,15 @@ normalizeFrontmatter kind filename block = do
         priority <- maybe 100 id <$> intOpt "priority" object
         hidden <- boolOpt "hiddenInNavbar" object
         mRedirect <- strOpt "redirectAs" object
+        mScript <- strOpt "script" object
         let known =
                 [ ("title", title)
                 , ("priority", T.pack (show priority))
                 , ("hiddenInNavbar", showBool hidden)
                 ]
                     <> maybe [] (\r -> [("redirectAs", r)]) mRedirect
-        Right (render (known <> unknownPairs object ["title", "priority", "hiddenInNavbar", "redirectAs"]), unknownKeys object ["title", "priority", "hiddenInNavbar", "redirectAs"])
+                    <> maybe [] (\s -> [("script", s)]) mScript
+        Right (render (known <> unknownPairs object ["title", "priority", "hiddenInNavbar", "redirectAs", "script"]), unknownKeys object ["title", "priority", "hiddenInNavbar", "redirectAs", "script"])
 
     strOpt :: Text -> KM.KeyMap Value -> Either Text (Maybe Text)
     strOpt key object = case lookupKey key object of

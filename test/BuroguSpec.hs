@@ -1,5 +1,6 @@
 module Main where
 
+import Builtins (initialEnv)
 import Cli (Command (..), Paths (..), cliInfo)
 import Config (DeployConfig (..), SiteConfig (..), Theme (..), loadConfig)
 import Control.Exception (IOException, try)
@@ -15,18 +16,22 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
 import Data.Yaml (ParseException, decodeEither')
 import Doc (OutputStyle (..), extractSection, langFromLocale, manualContent, render, sections)
+import Eval (LangError (..), runScript)
 import Feed (feedUrl, renderAtom)
 import Format (formatOne)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
-import Html (groupByTag, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
-import I18n (UILang (..), fromSiteLang, messages, t, tWith)
+import Html (groupByTag, render404, renderArchive, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
+import I18n (UILang (..), fromSiteLang, messages, tWith)
+import Lexer (lexTokens)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Page (CustomPage (..), loadPage, loadPages)
-import Paths_burogu (getDataFileName)
+import Parser (parseProgram)
+import Paths_burogu ()
 import Post (Post (..), TocEntry (..), mathMethod, parsePost, warnCaseTags)
 import Posts (runDraft, runNew, runPublish)
 import Registry (SitePages (..), classifyPages, navItems)
+import Scripts (evalScript, scriptCtx)
 import Search (renderSearch, renderSearchIndex)
 import Shaft (presetByName, presetNames, shaftPreset)
 import Site (BuildReport (..), build)
@@ -37,6 +42,7 @@ import Template (ConfigValues (..), defaultConfigTemplate, emptyConfigValues, re
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 import Text.Pandoc.Options (HTMLMathMethod (..), defaultMathJaxURL)
+import Value (showValue)
 import Watch (contentType, parsePath, resolveFile)
 
 main :: IO ()
@@ -45,169 +51,174 @@ main = defaultMain tests
 tests :: TestTree
 tests =
     testGroup
-        "Post"
-        [ fullFrontmatter
-        , dateFromFilenamePrefix
-        , frontmatterDateBeatsPrefix
-        , invalidDateErrors
-        , missingDateErrors
-        , titleDefaultsToSlug
-        , nonAsciiSlugPreserved
-        , tagsParsed
-        , tagsWrongTypeErrors
-        , emptyTagErrors
-        , whitespaceTagErrors
-        , reservedCharTagErrors
-        , draftParsed
-        , draftAllowsMissingDate
-        , bodyRendered
-        , highlightedCode
-        , caseVariantWarning
-        , noCaseVariantWarning
-        , tagGrouping
-        , tagGroupingPreservesOrder
-        , tagUrlTest
-        , feedUrlTest
-        , feedXmlDeclaration
-        , feedContainsEntryLink
-        , feedUpdated
-        , feedEscaping
-        , feedSummaryShown
-        , feedSummaryHidden
-        , ogMetaOnPost
-        , ogTypeWebsiteOnIndex
-        , ogUrlAbsentWithoutBaseUrl
-        , ogDescriptionFallsBack
-        , mathjaxInlineMath
-        , mathjaxNoMathNoScript
-        , plainMathNoScript
-        , mathMethodMapping
-        , tagsLabelCustomized
-        , tagArchiveTitleIsTagName
-        , cssRootTokens
-        , cssDarkMediaQuery
-        , cssTokenRules
-        , cssTokenTableCompleteness
-        , cssGradientRules
-        , cssListSpacing
-        , cssMobileBreakpoint
-        , cssOverflowRules
-        , cssSafeArea
-        , searchInputFocusStyled
-        , viewportFitCover
-        , cssExtraCssAppended
-        , ariaPresetRegression
-        , presetLookup
-        , fontOverridesApplied
-        , fontStackQuoting
-        , fontFaceEmitted
-        , shaftPresetOutput
-        , shaftHarmonyRules
-        , fontsFromJson
-        , siteNameClass
-        , tagSeparatorSpan
-        , tagCountHook
-        , cliDefaults
-        , cliOverrides
-        , cliInvalidArg
-        , sitemapUrls
-        , sitemapLastmod
-        , robotsContent
-        , notFoundPage
-        , extraJsInjected
-        , serverParsePath
-        , serverResolveFile
-        , serverContentType
-        , customPageTitle
-        , customPageMissing
-        , customPageBody
-        , customPageHasMath
-        , aboutNavShown
-        , aboutNavHidden
-        , copyrightCustom
-        , footerCreditShown
-        , footerCreditHidden
-        , loadPagesFromDir
-        , loadPagesMissingDir
-        , loadPagesErrorAggregation
-        , navMultiplePages
-        , pagePriorityParsed
-        , pagePriorityDefault
-        , pagePriorityInvalid
-        , pageRedirectAsParsed
-        , classifySpecialPages
-        , classifyUnknownRedirectAs
-        , classifyExternalRedirect
-        , classifyInvalidRedirectAs
-        , classifyDuplicateSpecial
-        , classifyCollision
-        , hiddenInNavbarParsed
-        , hiddenInNavbarFiltersNav
-        , redirectStubNavVisibility
-        , notFoundInNavByDefault
-        , navPriorityOrder
-        , navPriorityTieLexicographic
-        , navDefaultPriorityLast
-        , navTagsPosition
-        , archiveYearGroups
-        , redirectPageMetaRefresh
-        , tagsLabelRejected
-        , searchIndexShape
-        , searchIndexEscaping
-        , searchIndexExcludesSpecials
-        , searchPageRendered
-        , searchPageScript
-        , buildKeepsOutputOnPageError
-        , fontFileMissingKeepsOldOutput
-        , redirectStubBuilt
-        , docRenderPlain
-        , docRenderColor
-        , docHeadingDepth
-        , docSectionExtraction
-        , docLangFromLocale
-        , manualsPresent
-        , frontmatterSplit
-        , frontmatterPostDefaults
-        , frontmatterEmptyFilled
-        , frontmatterMalformedErrors
-        , postsDraftCreatesDatedFile
-        , postsNewCreatesDatedPost
-        , postsSlugDuplicateRejected
-        , postsPublishPromotes
-        , postsPublishNonDraftRejected
-        , postsPublishMissingRejected
-        , postsPublishLegacyDraft
-        , postTocParsed
-        , tocFrontmatterParsed
-        , renderPostTocShown
-        , renderPostTocHidden
-        , readingTimeShown
-        , postNavRendered
-        , postNavSingleSide
-        , indexSpecialPageClassified
-        , indexPageRenderedOnHome
-        , indexPageExcludedFromNav
-        , darkThemeAttributeSelectors
-        , themeToggleScriptInjected
-        , i18nCompleteness
-        , i18nFromSiteLang
-        , i18nPlaceholders
-        , i18nPageOutput
-        , formatTocKey
-        , tocLevelClasses
-        , contentElementStyles
-        , searchNoResults
-        , codeScriptInjected
-        , codeBlockStyles
-        , frontmatterPageDefaults
-        , frontmatterNoDateError
-        , frontmatterDraftNoDate
-        , frontmatterUnknownKeys
-        , frontmatterDescriptionOmitted
-        , configTemplateGolden
-        , configFormatValues
-        , formatWritesFile
-        , formatDryRunDoesNotWrite
+        "burogu"
+        [ testGroup
+            "Post"
+            [ fullFrontmatter
+            , dateFromFilenamePrefix
+            , frontmatterDateBeatsPrefix
+            , invalidDateErrors
+            , missingDateErrors
+            , titleDefaultsToSlug
+            , nonAsciiSlugPreserved
+            , tagsParsed
+            , tagsWrongTypeErrors
+            , emptyTagErrors
+            , whitespaceTagErrors
+            , reservedCharTagErrors
+            , draftParsed
+            , draftAllowsMissingDate
+            , bodyRendered
+            , highlightedCode
+            , caseVariantWarning
+            , noCaseVariantWarning
+            , tagGrouping
+            , tagGroupingPreservesOrder
+            , tagUrlTest
+            , feedUrlTest
+            , feedXmlDeclaration
+            , feedContainsEntryLink
+            , feedUpdated
+            , feedEscaping
+            , feedSummaryShown
+            , feedSummaryHidden
+            , ogMetaOnPost
+            , ogTypeWebsiteOnIndex
+            , ogUrlAbsentWithoutBaseUrl
+            , ogDescriptionFallsBack
+            , mathjaxInlineMath
+            , mathjaxNoMathNoScript
+            , plainMathNoScript
+            , mathMethodMapping
+            , tagsLabelCustomized
+            , tagArchiveTitleIsTagName
+            , cssRootTokens
+            , cssDarkMediaQuery
+            , cssTokenRules
+            , cssTokenTableCompleteness
+            , cssGradientRules
+            , cssListSpacing
+            , cssMobileBreakpoint
+            , cssOverflowRules
+            , cssSafeArea
+            , searchInputFocusStyled
+            , viewportFitCover
+            , cssExtraCssAppended
+            , ariaPresetRegression
+            , presetLookup
+            , fontOverridesApplied
+            , fontStackQuoting
+            , fontFaceEmitted
+            , shaftPresetOutput
+            , shaftHarmonyRules
+            , fontsFromJson
+            , siteNameClass
+            , tagSeparatorSpan
+            , tagCountHook
+            , cliDefaults
+            , cliOverrides
+            , cliInvalidArg
+            , sitemapUrls
+            , sitemapLastmod
+            , robotsContent
+            , notFoundPage
+            , extraJsInjected
+            , serverParsePath
+            , serverResolveFile
+            , serverContentType
+            , customPageTitle
+            , customPageMissing
+            , customPageBody
+            , customPageHasMath
+            , aboutNavShown
+            , aboutNavHidden
+            , copyrightCustom
+            , footerCreditShown
+            , footerCreditHidden
+            , loadPagesFromDir
+            , loadPagesMissingDir
+            , loadPagesErrorAggregation
+            , navMultiplePages
+            , pagePriorityParsed
+            , pagePriorityDefault
+            , pagePriorityInvalid
+            , pageRedirectAsParsed
+            , classifySpecialPages
+            , classifyUnknownRedirectAs
+            , classifyExternalRedirect
+            , classifyInvalidRedirectAs
+            , classifyDuplicateSpecial
+            , classifyCollision
+            , hiddenInNavbarParsed
+            , hiddenInNavbarFiltersNav
+            , redirectStubNavVisibility
+            , notFoundInNavByDefault
+            , navPriorityOrder
+            , navPriorityTieLexicographic
+            , navDefaultPriorityLast
+            , navTagsPosition
+            , archiveYearGroups
+            , redirectPageMetaRefresh
+            , tagsLabelRejected
+            , searchIndexShape
+            , searchIndexEscaping
+            , searchIndexExcludesSpecials
+            , searchPageRendered
+            , searchPageScript
+            , buildKeepsOutputOnPageError
+            , fontFileMissingKeepsOldOutput
+            , redirectStubBuilt
+            , docRenderPlain
+            , docRenderColor
+            , docHeadingDepth
+            , docSectionExtraction
+            , docLangFromLocale
+            , manualsPresent
+            , frontmatterSplit
+            , frontmatterPostDefaults
+            , frontmatterEmptyFilled
+            , frontmatterMalformedErrors
+            , postsDraftCreatesDatedFile
+            , postsNewCreatesDatedPost
+            , postsSlugDuplicateRejected
+            , postsPublishPromotes
+            , postsPublishNonDraftRejected
+            , postsPublishMissingRejected
+            , postsPublishLegacyDraft
+            , postTocParsed
+            , tocFrontmatterParsed
+            , renderPostTocShown
+            , renderPostTocHidden
+            , readingTimeShown
+            , postNavRendered
+            , postNavSingleSide
+            , indexSpecialPageClassified
+            , indexPageRenderedOnHome
+            , indexPageExcludedFromNav
+            , darkThemeAttributeSelectors
+            , themeToggleScriptInjected
+            , i18nCompleteness
+            , i18nFromSiteLang
+            , i18nPlaceholders
+            , i18nPageOutput
+            , formatTocKey
+            , tocLevelClasses
+            , contentElementStyles
+            , searchNoResults
+            , codeScriptInjected
+            , codeBlockStyles
+            , frontmatterPageDefaults
+            , frontmatterNoDateError
+            , frontmatterDraftNoDate
+            , frontmatterUnknownKeys
+            , frontmatterDescriptionOmitted
+            , configTemplateGolden
+            , configFormatValues
+            , formatWritesFile
+            , formatDryRunDoesNotWrite
+            ]
+        , testGroup "DSL" dslTests
+        , testGroup "Scripts" scriptsTests
         ]
 
 postsDraftCreatesDatedFile :: TestTree
@@ -1245,7 +1256,7 @@ mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
 mkPage title priority redirect = mkPageHidden title priority redirect False
 
 mkPageHidden :: Maybe Text -> Int -> Maybe Text -> Bool -> CustomPage
-mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpText = ""}
+mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpScript = Nothing, cpText = ""}
 
 classifySpecialPages :: TestTree
 classifySpecialPages =
@@ -1802,3 +1813,261 @@ formatWritesFile =
         assertEqual "no errors" False result
         content <- readFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md"
         assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n---\n\nbody\n" (T.pack content)
+
+dslTests :: [TestTree]
+dslTests =
+    [ dslArithmetic
+    , dslStringInterpolation
+    , dslLogicAndIf
+    , dslArraysAndMaps
+    , dslLambdasAndHigherOrder
+    , dslDefRecursionClosures
+    , dslBuiltins
+    , dslPutsOutput
+    , dslErrors
+    , dslLexerErrors
+    , dslParserErrors
+    ]
+
+dslArithmetic :: TestTree
+dslArithmetic =
+    testCase "arithmetic, precedence, unary minus" $ do
+        assertEqual "add" (Right "3") (runLang "1 + 2")
+        assertEqual "precedence" (Right "4") (runLang "10 - 2 * 3")
+        assertEqual "parens" (Right "24") (runLang "(10 - 2) * 3")
+        assertEqual "div" (Right "2.5") (runLang "10 / 4")
+        assertEqual "mod" (Right "1") (runLang "7 % 3")
+        assertEqual "unary minus" (Right "-3") (runLang "-5 + 2")
+        assertEqual "decimal" (Right "3") (runLang "1.5 + 1.5")
+        assertEqual "decimal display" (Right "\"1.5\"") (runLang "toStr(1.5)")
+        assertEqual "grouping" (Right "9") (runLang "(1 + 2) * 3")
+        assertEqual "adjacent exprs" (Right "2") (runLang "1 2")
+        assertEqual "top-level calls" (Right "2") (runLang "def f() 1 end def g() 2 end f() g()")
+        assertEqual "space call" (Right "10") (runLang "def f(x) x * 2 end f (5)")
+        assertEqual "compare" (Right "true") (runLang "1 + 2 * 3 == 7")
+        assertEqual "string add" (Right "\"ab\"") (runLang "\"a\" + \"b\"")
+
+dslStringInterpolation :: TestTree
+dslStringInterpolation =
+    testCase "string interpolation and escapes" $ do
+        assertEqual "basic" (Right "\"a2b\"") (runLang "\"a#{1 + 1}b\"")
+        assertEqual "bool" (Right "\"false\"") (runLang "\"#{1 > 2}\"")
+        assertEqual "nil" (Right "\"nil\"") (runLang "\"#{nil}\"")
+        assertEqual "nested" (Right "\"xy1z\"") (runLang "\"x#{ \"y#{1}\" }z\"")
+        assertEqual "escape" (Right "\"a\nb\"") (runLang "\"a\\nb\"")
+
+dslLogicAndIf :: TestTree
+dslLogicAndIf =
+    testCase "short-circuit, truthiness, if" $ do
+        assertEqual "and returns value" (Right "1") (runLang "true && 1")
+        assertEqual "or short" (Right "\"a\"") (runLang "false || \"a\"")
+        assertEqual "nil or" (Right "2") (runLang "nil || 2")
+        assertEqual "zero truthy" (Right "1") (runLang "0 && 1")
+        assertEqual "not nil" (Right "true") (runLang "!nil")
+        assertEqual "not zero" (Right "false") (runLang "!0")
+        assertEqual "if true" (Right "\"y\"") (runLang "if 1 < 2 then \"y\" else \"n\" end")
+        assertEqual "if no else" (Right "nil") (runLang "if false then 1 end")
+        assertEqual "if value" (Right "5") (runLang "if true then 5 else 6 end")
+
+dslArraysAndMaps :: TestTree
+dslArraysAndMaps =
+    testCase "arrays, maps, indexing" $ do
+        assertEqual "at array" (Right "2") (runLang "at([1, 2, 3], 1)")
+        assertEqual "get" (Right "1") (runLang "get({\"a\" => 1}, \"a\")")
+        assertEqual "get missing" (Right "nil") (runLang "get({\"a\" => 1}, \"b\")")
+        assertEqual "keys" (Right "[\"a\", \"b\"]") (runLang "keys({\"a\" => 1, \"b\" => 2})")
+        assertEqual "values" (Right "[1, 2]") (runLang "values({\"a\" => 1, \"b\" => 2})")
+        assertEqual "len arr" (Right "3") (runLang "len([1, 2, 3])")
+        assertEqual "len str" (Right "5") (runLang "len(\"hello\")")
+        assertEqual "len map" (Right "1") (runLang "len({\"a\" => 1})")
+
+dslLambdasAndHigherOrder :: TestTree
+dslLambdasAndHigherOrder =
+    testCase "lambdas, map/filter, blocks" $ do
+        assertEqual "lambda call" (Right "6") (runLang "{ x -> x * 2 }(3)")
+        assertEqual "map" (Right "[2, 4, 6]") (runLang "map([1, 2, 3], { x -> x * 2 })")
+        assertEqual "filter" (Right "[2, 4]") (runLang "filter([1, 2, 3, 4], { x -> x % 2 == 0 })")
+        assertEqual "map interp" (Right "[\"n1\", \"n2\"]") (runLang "map([1, 2], { x -> \"n#{x}\" })")
+        assertEqual "block on call" (Right "[3, 4]") (runLang "map([1, 2], { x -> x + 2 })")
+
+dslDefRecursionClosures :: TestTree
+dslDefRecursionClosures =
+    testCase "def, recursion, closures" $ do
+        assertEqual "def" (Right "10") (runLang "def f(x) x * 2 end f(5)")
+        assertEqual "recursion" (Right "120") (runLang "def fact(n) if n <= 1 then 1 else n * fact(n - 1) end end fact(5)")
+        assertEqual "closure" (Right "15") (runLang "def make(x) { y -> x + y } end (make(10))(5)")
+        assertEqual "higher order" (Right "3") (runLang "def twice(f, x) f(f(x)) end twice({ y -> y + 1 }, 1)")
+        assertEqual "mutual defs" (Right "4") (runLang "def a(x) b(x) end def b(x) x + 2 end a(2)")
+
+dslBuiltins :: TestTree
+dslBuiltins =
+    testCase "builtin functions" $ do
+        assertEqual "join" (Right "\"1-2-3\"") (runLang "join([1, 2, 3], \"-\")")
+        assertEqual "split" (Right "[\"a\", \"b\", \"c\"]") (runLang "split(\"a-b-c\", \"-\")")
+        assertEqual "reverse" (Right "[3, 2, 1]") (runLang "reverse([1, 2, 3])")
+        assertEqual "sort" (Right "[1, 2, 3]") (runLang "sort([3, 1, 2])")
+        assertEqual "sort strings" (Right "[\"a\", \"b\", \"c\"]") (runLang "sort([\"c\", \"a\", \"b\"])")
+        assertEqual "first" (Right "1") (runLang "first([1, 2])")
+        assertEqual "last empty" (Right "nil") (runLang "last([])")
+        assertEqual "contains str" (Right "true") (runLang "contains(\"hello\", \"ell\")")
+        assertEqual "contains arr" (Right "true") (runLang "contains([1, 2], 2)")
+        assertEqual "append" (Right "[1, 2]") (runLang "append([1], 2)")
+        assertEqual "concat arr" (Right "[1, 2, 3]") (runLang "concat([1], [2, 3])")
+        assertEqual "concat str" (Right "\"ab\"") (runLang "concat(\"a\", \"b\")")
+        assertEqual "toStr" (Right "\"42\"") (runLang "toStr(42)")
+        assertEqual "at string" (Right "\"b\"") (runLang "at(\"abc\", 1)")
+        assertEqual "trim" (Right "\"a\"") (runLang "trim(\"  a  \")")
+        assertEqual "lower" (Right "\"abc\"") (runLang "lower(\"AbC\")")
+        assertEqual "upper" (Right "\"ABC\"") (runLang "upper(\"aBc\")")
+        assertEqual "replace" (Right "\"x-b-x\"") (runLang "replace(\"a-b-a\", \"a\", \"x\")")
+        assertEqual "take" (Right "[1, 2]") (runLang "take([1, 2, 3], 2)")
+        assertEqual "take str" (Right "\"he\"") (runLang "take(\"hello\", 2)")
+        assertEqual "drop" (Right "[3]") (runLang "drop([1, 2, 3], 2)")
+        assertEqual "take negative" (Right "[]") (runLang "take([1, 2], -1)")
+
+dslPutsOutput :: TestTree
+dslPutsOutput =
+    testCase "puts collects output" $ do
+        assertEqual "puts" (Right "nil | puts: hi;1") (runLang "puts(\"hi\", 1)")
+        assertEqual "puts inside" (Right "[1] | puts: got 1") (runLang "map([1], { x -> puts(\"got #{x}\") x })")
+
+dslErrors :: TestTree
+dslErrors =
+    testCase "runtime errors with call stacks" $ do
+        assertEqual "undefined" (Left "undefined variable 'foo'") (runLangErr "foo")
+        assertEqual "type add" (Left "cannot add: expected number or string, got 1 and \"a\"") (runLangErr "1 + \"a\"")
+        assertEqual "div zero" (Left "division by zero") (runLangErr "1 / 0")
+        assertEqual "out of bounds" (Left "index 9 out of bounds (length 3) [\"at\"]") (runLangErr "at(\"abc\", 9)")
+        assertEqual "map type" (Left "cannot map: expected array and function, got 1 [\"map\"]") (runLangErr "map(1, { x -> x })")
+        assertEqual "not callable" (Left "not callable: 1") (runLangErr "1(2)")
+        assertEqual "arity" (Left "expected 1 argument(s), got 2") (runLangErr "def f(x) x end f(1, 2)")
+        assertEqual "stack" (Left "undefined variable 'foo' [\"g\",\"f\"]") (runLangErr "def g(x) foo end def f(x) g(x) end f(1)")
+        assertEqual "missing key nil" (Right "nil") (runLang "get({\"a\" => 1}, \"nope\")")
+
+dslLexerErrors :: TestTree
+dslLexerErrors =
+    testCase "lexer errors" $ do
+        assertEqual "bad char" (Left "line 1, column 1: unexpected character @") (runLangErr "@")
+        assertEqual "unterminated string" (Left "line 1, column 2: unterminated string literal") (runLangErr "\"abc")
+        assertEqual "unterminated interp" (Left "line 1, column 3: unterminated interpolation") (runLangErr "\"#{1")
+        assertEqual "equals" (Left "line 1, column 3: unexpected '=' (did you mean '=='?)") (runLangErr "1 = 2")
+
+dslParserErrors :: TestTree
+dslParserErrors =
+    testCase "parser errors" $ do
+        assertEqual "eof" (Left "line 1, column 4: unexpected end of input") (runLangErr "1 +")
+        assertEqual "if end" (Left "expected 'else' or 'end' in if") (runLangErr "if 1 then 2")
+        assertEqual "multi interp" (Left "interpolation must contain exactly one expression") (runLangErr "\"#{1 2}\"")
+        assertEqual "array unterminated" (Left "line 1, column 6: unterminated array literal") (runLangErr "[1, 2")
+        assertEqual "map arrow" (Left "expected '=>' in map literal") (runLangErr "{\"a\" 1}")
+
+runLang :: Text -> Either Text Text
+runLang src = do
+    toks <- lexTokens src
+    exprs <- parseProgram toks
+    case runScript initialEnv exprs of
+        Left e -> Left (leMsg e)
+        Right (v, out) -> Right (showValue v <> if null out then "" else " | puts: " <> T.intercalate ";" out)
+
+runLangErr :: Text -> Either Text Text
+runLangErr src = do
+    toks <- lexTokens src
+    exprs <- parseProgram toks
+    case runScript initialEnv exprs of
+        Left e ->
+            Left (leMsg e <> (if null (leStack e) then "" else " " <> T.pack (show (leStack e))))
+        Right _ -> Left "expected error"
+
+scriptsTests :: [TestTree]
+scriptsTests =
+    [ scriptsEvalBasic
+    , scriptsCtxInjection
+    , scriptsErrorFormat
+    , scriptFrontmatterField
+    , buildScriptPage
+    , buildScriptPageFull
+    , scriptErrorKeepsOldOutput
+    ]
+
+scriptsEvalBasic :: TestTree
+scriptsEvalBasic =
+    testCase "evalScript runs a script and returns its string" $ do
+        assertEqual "literal" (Right ("<p>hi</p>", [])) (evalScript (scriptCtx testConfig [] []) "\"<p>hi</p>\"")
+        assertEqual "expr" (Right ("42", [])) (evalScript (scriptCtx testConfig [] []) "\"#{6 * 7}\"")
+        assertEqual "puts" (Right ("1", ["hello"])) (evalScript (scriptCtx testConfig [] []) "puts(\"hello\") 1")
+
+scriptsCtxInjection :: TestTree
+scriptsCtxInjection =
+    testCase "site, posts and tags are injected" $ do
+        let env = scriptCtx testConfig [postWithTags ["a"]] []
+        assertEqual "site name" (Right ("burogu", [])) (evalScript env "get(site, \"siteName\")")
+        assertEqual "site lang" (Right ("zh-CN", [])) (evalScript env "get(site, \"siteLang\")")
+        assertEqual "post count" (Right ("1", [])) (evalScript env "toStr(len(posts))")
+        assertEqual "post title" (Right ("test", [])) (evalScript env "get(at(posts, 0), \"title\")")
+        assertEqual "post tags" (Right ("a", [])) (evalScript env "join(get(at(posts, 0), \"tags\"), \", \")")
+        assertEqual "tag count" (Right ("1", [])) (evalScript env "toStr(len(tags))")
+        assertEqual "tag name" (Right ("a", [])) (evalScript env "get(at(tags, 0), \"name\")")
+        assertEqual "tag count value" (Right ("1", [])) (evalScript env "toStr(get(at(tags, 0), \"count\"))")
+
+scriptsErrorFormat :: TestTree
+scriptsErrorFormat =
+    testCase "script errors carry message and call stack" $ do
+        assertEqual "syntax" (Left "line 1, column 1: unexpected ')'") (evalScript (scriptCtx testConfig [] []) ")")
+        assertEqual "runtime" (Left "undefined variable 'foo' []") (evalScript (scriptCtx testConfig [] []) "foo")
+        assertEqual "stack" (Left "division by zero [f]") (evalScript (scriptCtx testConfig [] []) "def f() 1 / 0 end f()")
+
+scriptFrontmatterField :: TestTree
+scriptFrontmatterField =
+    testCase "page frontmatter keeps a script field" $ do
+        result <- pure (normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\n")
+        case result of
+            Left err -> assertBool ("expected success, got " <> T.unpack err) False
+            Right (block, _) -> do
+                assertBool "script kept" ("script: hello.d" `textIn` block)
+                assertBool "script in known keys" (not ("unknown" `T.isInfixOf` block))
+
+buildScriptPage :: TestTree
+buildScriptPage =
+    testCase "a script page renders the script output" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/script-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/script-src/_scripts"
+        writeFile "/tmp/burogu-test/script-src/_pages/hello.md" "---\ntitle: Hello\nscript: hello.d\n---\nignored\n"
+        writeFile "/tmp/burogu-test/script-src/_scripts/hello.d" "\"<p>hi #{get(site, \"siteName\")}</p>\""
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/script-src", pOut = "/tmp/burogu-test/script-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        content <- TIO.readFile "/tmp/burogu-test/script-out/hello/index.html"
+        assertBool "script body" ("<p>hi burogu</p>" `textIn` content)
+
+scriptErrorKeepsOldOutput :: TestTree
+scriptErrorKeepsOldOutput =
+    testCase "script errors keep the previous output directory" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptbad-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptbad-src/_scripts"
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptbad-out"
+        writeFile "/tmp/burogu-test/scriptbad-src/_pages/hello.md" "---\ntitle: Hello\nscript: hello.d\n---\n"
+        writeFile "/tmp/burogu-test/scriptbad-src/_scripts/hello.d" "1 +"
+        writeFile "/tmp/burogu-test/scriptbad-out/marker.txt" "old"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/scriptbad-src", pOut = "/tmp/burogu-test/scriptbad-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left _ -> pure ()
+            Right _ -> assertBool "expected failure" False
+        marker <- doesFileExist "/tmp/burogu-test/scriptbad-out/marker.txt"
+        assertBool "old output kept" marker
+
+buildScriptPageFull :: TestTree
+buildScriptPageFull =
+    testCase "a script sees posts and tags and renders the full fragment" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptfull-src/_pages"
+        createDirectoryIfMissing True "/tmp/burogu-test/scriptfull-src/_scripts"
+        writeFile "/tmp/burogu-test/scriptfull-src/_pages/list.md" "---\ntitle: List\nscript: list.d\n---\n"
+        writeFile "/tmp/burogu-test/scriptfull-src/_scripts/list.d" "puts(\"generating list\")\n\"<ul>\" + join(map(posts, { p -> \"<li>\" + get(p, \"title\") + \"</li>\" }), \"\") + \"</ul><p>\" + join(map(tags, { t -> get(t, \"name\") }), \", \") + \"</p>\""
+        let p1 = (postWithTags ["x"]){postTitle = "Alpha", postDate = "2026-08-01", postSlug = "alpha"}
+            p2 = (postWithTags ["x", "y"]){postTitle = "Beta", postDate = "2026-08-02", postSlug = "beta"}
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/scriptfull-src", pOut = "/tmp/burogu-test/scriptfull-out"} testConfig [p1, p2]) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        content <- TIO.readFile "/tmp/burogu-test/scriptfull-out/list/index.html"
+        assertBool "full fragment" ("<ul><li>Alpha</li><li>Beta</li></ul><p>x, y</p>" `textIn` content)
