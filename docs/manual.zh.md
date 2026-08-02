@@ -377,6 +377,14 @@ site/                构建输出（每次构建重新生成）
 `tags`     全部标签及其文章数：name、count
 `config`   原始配置：theme（preset、math、mathUrl、extraCss、
            extraJs）、srcRepo
+`data`     用户数据文件：`src/_data/` 下每个 YAML 文件（文件名去
+           `.yaml` → 内容）；其他扩展名被忽略
+
+脚本产出一个字符串；去向由页面声明决定：只有 `script:` 时填入
+页面正文（套用常规 layout）；`script:` + `output:` 时写入站点
+指定路径（无 layout）。输出文件最后写入，因此脚本可以覆盖生成器
+或静态文件写出的任何内容——包括 `index.html`（完全自定义首页）
+和文章页。
 
 `puts(...)` 在构建时把参数打印到 stderr。脚本的任何错误（语法或
 运行时）都像其他页面错误一样使构建失败，输出目录保持不变。
@@ -421,6 +429,10 @@ else expr end`（`else` 分支可省）。运算符：`+ - * / % == != <
     drop(a, n)      去掉前 n 个元素（或字符）
     toStr(v)        数字/布尔/nil/字符串转字符串
     toJson(v)       值转 pretty JSON（nil 变 null）
+    formatDate(d, f)  strftime 风格日期格式化（ISO 日期）
+
+指令：%Y %y %m %d %b %B %a %A %%；%-m/%-d 去补零；未知指令报错。
+例：formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
     puts(...)       打印参数到 stderr（返回 nil）
 
 #### 示例

@@ -379,6 +379,14 @@ URL）開頭，其餘格式是建置錯誤；目標等於本頁自己的 slug UR
 `tags`     全部標籤及其文章數：name、count
 `config`   原始設定：theme（preset、math、mathUrl、extraCss、
            extraJs）、srcRepo
+`data`     使用者資料檔：`src/_data/` 下每個 YAML 檔（檔名去
+           `.yaml` → 內容）；其他副檔名被忽略
+
+腳本產出一個字串；去向由頁面宣告決定：只有 `script:` 時填入
+頁面內文（套用常規 layout）；`script:` + `output:` 時寫入站台
+指定路徑（無 layout）。輸出檔最後寫入，因此腳本可以覆蓋產生器
+或靜態檔寫出的任何內容——包括 `index.html`（完全自訂首頁）
+和文章頁。
 
 `puts(...)` 在建置時把參數印到 stderr。腳本的任何錯誤（語法或
 執行期）都像其他頁面錯誤一樣使建置失敗，輸出目錄保持不變。
@@ -423,6 +431,10 @@ else expr end`（`else` 分支可省）。運算子：`+ - * / % == != <
     drop(a, n)      去掉前 n 個元素（或字元）
     toStr(v)        數字/布林/nil/字串轉字串
     toJson(v)       值轉 pretty JSON（nil 變 null）
+    formatDate(d, f)  strftime 風格日期格式化（ISO 日期）
+
+指令：%Y %y %m %d %b %B %a %A %%；%-m/%-d 去補零；未知指令報錯。
+例：formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
     puts(...)       印出參數到 stderr（回傳 nil）
 
 #### 範例

@@ -421,6 +421,16 @@ Scripts run with the site context bound:
 `tags`     every tag with its post count: name, count
 `config`   the raw configuration: theme (preset, math, mathUrl,
            extraCss, extraJs), srcRepo
+`data`     the user data files: every YAML file in `src/_data/`
+           (file name without `.yaml` -> parsed content); other
+           extensions are ignored
+
+Scripts produce a string; where it goes depends on the page
+declaration: a plain `script:` fills the page body (rendered inside
+the usual layout), `script:` + `output:` writes the string to the
+given site path (no layout). Output files are written last, so a
+script can override anything the generator or a static file wrote,
+including `index.html` (a fully custom home page) and post pages.
 
 `puts(...)` prints its arguments to stderr during the build. Any
 script error (syntax or runtime) fails the build like any other
@@ -469,6 +479,11 @@ Built-ins:
     drop(a, n)      all but the first n elements (or characters)
     toStr(v)        number/bool/nil/string as a string
     toJson(v)       value as pretty JSON (nil becomes null)
+    formatDate(d, f)  strftime-style date formatting (ISO date)
+
+Directives: %Y %y %m %d %b %B %a %A %%; %-m/%-d drop the
+zero pad; unknown directives are errors. Example:
+formatDate(date, "%Y年%-m月%-d日") -> 2026年8月2日
     puts(...)       prints arguments to stderr (returns nil)
 
 #### Example
