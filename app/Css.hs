@@ -335,7 +335,9 @@ baseRules = do
     (".footer-links" :: C.Selector) C.? do
         "flex-basis" C.-: "100%"
         "font-size" C.-: "calc(var(--font-size) * 0.9)"
-    (".footer-links" :: C.Selector) C.? C.a C.? ("color" C.-: "var(--color-link)")
+        "margin-bottom" C.-: "var(--space-list-gap)"
+    (".footer-links" :: C.Selector) C.? C.a C.? ("color" C.-: "var(--color-muted)")
+    (".site-footer" :: C.Selector) C.? C.p C.? ("margin-top" C.-: "0")
     (".theme-toggle" :: C.Selector) C.? do
         "border" C.-: "none"
         "background" C.-: "none"

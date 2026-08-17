@@ -193,14 +193,21 @@ time
 
 .footer-links
 {
-  flex-basis : 100%;
-  font-size  : calc(var(--font-size) * 0.9);
+  flex-basis    : 100%;
+  font-size     : calc(var(--font-size) * 0.9);
+  margin-bottom : var(--space-list-gap);
 }
 
 
 .footer-links a
 {
-  color : var(--color-link);
+  color : var(--color-muted);
+}
+
+
+.site-footer p
+{
+  margin-top : 0;
 }
 
 .theme-toggle
