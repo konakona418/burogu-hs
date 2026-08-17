@@ -1,7 +1,7 @@
 module Format (formatOne, run) where
 
 import Cli (Paths (..))
-import Config (RawConfig (..), RawDeploy (..), RawTheme (..))
+import Config (RawConfig (..), RawDeploy (..), RawTheme (..), knownConfigKeys)
 import Control.Exception (IOException, catch)
 import Control.Monad (foldM, unless)
 import Css (FontFile (..), Fonts (..), emptyFonts)
@@ -175,22 +175,6 @@ emptyRawTheme = RawTheme{rawMath = Nothing, rawMathUrl = Nothing, rawExtraCss = 
 {- | Config keys the template knows about. Unknown top-level keys are
 warned about and dropped.
 -}
-knownConfigKeys :: [Text]
-knownConfigKeys =
-    [ "siteName"
-    , "baseUrl"
-    , "siteAuthor"
-    , "siteDescription"
-    , "siteLang"
-    , "siteCopyright"
-    , "siteGeneratedBy"
-    , "footerSeparator"
-    , "tagsLabel"
-    , "deploy"
-    , "srcRepo"
-    , "theme"
-    ]
-
 warnUnknownConfigKeys :: String -> Text -> IO ()
 warnUnknownConfigKeys prefix content =
     case decodeEither' (encodeUtf8 content) :: Either ParseException Value of

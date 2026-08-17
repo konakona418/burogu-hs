@@ -1,4 +1,4 @@
-module Config (DeployConfig (..), RawConfig (..), RawDeploy (..), RawTheme (..), SiteConfig (..), Theme (..), loadConfig) where
+module Config (DeployConfig (..), RawConfig (..), RawDeploy (..), RawTheme (..), SiteConfig (..), Theme (..), knownConfigKeys, loadConfig) where
 
 import Control.Exception (IOException, catch)
 import Css (Fonts (..), emptyFonts)
@@ -238,19 +238,20 @@ warnUnknownKeys content = case decodeEither' (encodeUtf8 content) :: Either Pars
     Right (Object o) ->
         mapM_
             (\k -> warn ("config.yaml: unknown key '" <> k <> "' ignored"))
-            [k | k <- map K.toText (KM.keys o), k `notElem` knownKeys]
+            [k | k <- map K.toText (KM.keys o), k `notElem` knownConfigKeys]
     _ -> pure ()
 
-knownKeys :: [Text]
-knownKeys =
+knownConfigKeys :: [Text]
+knownConfigKeys =
     [ "siteName"
     , "siteAuthor"
     , "siteDescription"
     , "siteLang"
     , "baseUrl"
-    , "tagsLabel"
     , "siteCopyright"
     , "siteGeneratedBy"
+    , "footerSeparator"
+    , "tagsLabel"
     , "deploy"
     , "srcRepo"
     , "theme"
@@ -266,6 +267,7 @@ defaults =
         , siteBaseUrl = Nothing
         , siteCopyright = "© "
         , siteGeneratedBy = Nothing
+        , siteFooterSeparator = " · "
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = defaultTheme
