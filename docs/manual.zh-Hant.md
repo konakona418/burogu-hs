@@ -198,7 +198,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 文章得到 `title, date, tags, description, draft, toc`（frontmatter 沒有
 日期時從檔案名稱前綴取；草稿可省略日期）。頁面得到 `title,
-priority, hiddenInNavbar, redirectAs`。空的 `description`/
+priority, placement, redirectAs`。空的 `description`/
 `redirectAs` 不寫入。未知 frontmatter 鍵保留（依字典序）並警告；
 frontmatter 裡的註解不保留。
 
@@ -335,8 +335,9 @@ site/                建置輸出（每次建置重新產生）
 
 `title`            導覽標籤與頁面標題
 `priority`         導覽位置，小的在前（預設：100；負數可置頂）
-`hiddenInNavbar`   `true` 讓頁面不出現在導覽列裡（仍可透過 /slug/
-                   存取）
+`placement`       頁面連結出現的位置：`nav`（預設，頁首導覽）、
+                   `footer`（footer 連結列）或 `none`（都不出現；
+                   頁面仍可透過 /slug/ 存取）
 `redirectAs`       重新導向本頁：宣告特殊頁，或指向任意位址（見下）
 
 設定 `redirectAs` 後，本頁變為重新導向 stub：slug URL 提供指向
@@ -356,7 +357,11 @@ URL）開頭，其餘格式是建置錯誤；目標等於本頁自己的 slug UR
 - `/` - 首頁：內容轉譯在文章清單之前（清單帶小節標題）；不進導覽列
 
 所有頁面類型（普通頁、重新導向 stub、特殊頁，404 也不例外）預設
-都出現在導覽列裡；`hiddenInNavbar: true` 可隱藏其中任意一個。
+都出現在導覽列裡；`placement: none` 或 `placement: footer` 可從
+頁首導覽隱藏任意一個。footer 連結轉譯在版權行上方，以
+`footerSeparator`（config，空字串停用）分隔；`redirectAs` 為
+http(s) URL 的 footer 頁面直連目標。舊 `hiddenInNavbar` 鍵在建置時
+被拒絕；執行 `burogu format` 遷移。
 
 ### Scripts 腳本
 

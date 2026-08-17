@@ -1,10 +1,10 @@
-module Registry (SitePages (..), classifyPages, defaultArchiveTitle, defaultSearchTitle, defaultTagsLabel, navItems, specialPages) where
+module Registry (SitePages (..), classifyPages, defaultArchiveTitle, defaultSearchTitle, defaultTagsLabel, footerItems, navItems, specialPages) where
 
 import Data.List (find, sortOn)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Page (CustomPage (..))
+import Page (CustomPage (..), Placement (..))
 
 {- | The classified pages: special pages (declared via redirectAs) are
 pulled out of the normal page list, as are plain redirect stubs
@@ -112,33 +112,67 @@ data NavEntry = NavEntry
     , entryHref :: Text
     , entryPriority :: Int
     , entrySlug :: Text
-    , entryHidden :: Bool
+    , entryPlacement :: Placement
     }
 
 {- | Navbar entries: every page (normal pages, redirect stubs, and the
 special pages tags/archive/search/404), sorted by (priority, slug).
-Pages with `hiddenInNavbar: true` are left out.
+Pages with `placement` other than nav are left out.
 -}
 navItems :: SitePages -> [(Text, Text)]
 navItems sp =
     [ (entryLabel e, entryHref e)
     | e <- sortOn (\entry -> (entryPriority entry, entrySlug entry)) entries
-    , not (entryHidden e)
+    , entryPlacement e == PlNav
     ]
   where
     entries :: [NavEntry]
     entries =
         concat
-            [ [NavEntry (fromMaybe slug (cpTitle page)) ("/" <> slug <> "/") (cpPriority page) slug (cpHiddenInNavbar page) | (slug, page) <- spNormal sp]
-            , [NavEntry (fromMaybe slug (cpTitle page)) ("/" <> slug <> "/") (cpPriority page) slug (cpHiddenInNavbar page) | (slug, page) <- spRedirects sp]
-            , specialEntry "/tags/" defaultTagsLabel (spTags sp)
-            , specialEntry "/archive/" defaultArchiveTitle (spArchive sp)
-            , specialEntry "/search/" defaultSearchTitle (spSearch sp)
-            , specialEntry "/404.html" "404" (sp404 sp)
+            [ [entryOf slug page ("/" <> slug <> "/") | (slug, page) <- spNormal sp]
+            , [entryOf slug page ("/" <> slug <> "/") | (slug, page) <- spRedirects sp]
+            , navSpecial "/tags/" defaultTagsLabel (spTags sp)
+            , navSpecial "/archive/" defaultArchiveTitle (spArchive sp)
+            , navSpecial "/search/" defaultSearchTitle (spSearch sp)
+            , navSpecial "/404.html" "404" (sp404 sp)
             ]
     -- the index page is the homepage itself; the site name links there
-    specialEntry :: Text -> Text -> Maybe (Text, CustomPage) -> [NavEntry]
-    specialEntry href fallbackLabel mEntry =
+    navSpecial :: Text -> Text -> Maybe (Text, CustomPage) -> [NavEntry]
+    navSpecial href fallbackLabel mEntry =
         case mEntry of
             Nothing -> []
-            Just (slug, page) -> [NavEntry (fromMaybe fallbackLabel (cpTitle page)) href (cpPriority page) slug (cpHiddenInNavbar page)]
+            Just (slug, page) -> [(entryOf slug page href){entryLabel = fromMaybe fallbackLabel (cpTitle page)}]
+
+{- | Footer link entries: pages with `placement: footer`, sorted by
+(priority, slug). An external redirectAs target links straight out;
+anything else links to the page URL.
+-}
+footerItems :: SitePages -> [(Text, Text)]
+footerItems sp =
+    [ (entryLabel e, entryHref e)
+    | e <- sortOn (\entry -> (entryPriority entry, entrySlug entry)) entries
+    , entryPlacement e == PlFooter
+    ]
+  where
+    entries :: [NavEntry]
+    entries =
+        concat
+            [ [entryOf slug page (pageHref slug page) | (slug, page) <- spNormal sp]
+            , [entryOf slug page (pageHref slug page) | (slug, page) <- spRedirects sp]
+            , [entryOf slug page ("/" <> slug <> "/") | mEntry <- [spTags sp, spArchive sp, spSearch sp], (slug, page) <- maybe [] pure mEntry]
+            ]
+    pageHref :: Text -> CustomPage -> Text
+    pageHref slug page = case cpRedirectAs page of
+        Just target
+            | "http://" `T.isPrefixOf` target || "https://" `T.isPrefixOf` target -> target
+        _ -> "/" <> slug <> "/"
+
+entryOf :: Text -> CustomPage -> Text -> NavEntry
+entryOf slug page href =
+    NavEntry
+        { entryLabel = fromMaybe slug (cpTitle page)
+        , entryHref = href
+        , entryPriority = cpPriority page
+        , entrySlug = slug
+        , entryPlacement = cpPlacement page
+        }

@@ -198,7 +198,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 文章得到 `title, date, tags, description, draft, toc`（frontmatter 没有
 日期时从文件名前缀取；草稿可省略日期）。页面得到 `title,
-priority, hiddenInNavbar, redirectAs`。空的 `description`/
+priority, placement, redirectAs`。空的 `description`/
 `redirectAs` 不写入。未知 frontmatter 键保留（按字典序）并警告；
 frontmatter 里的注释不保留。
 
@@ -334,8 +334,9 @@ site/                构建输出（每次构建重新生成）
 
 `title`            导航标签与页面标题
 `priority`         导航位置，小的在前（默认：100；负数可置顶）
-`hiddenInNavbar`   `true` 让页面不出现在导航里（仍可通过 /slug/
-                   访问）
+`placement`       页面链接出现的位置：`nav`（默认，头部导航）、
+                   `footer`（footer 链接行）或 `none`（都不出现；
+                   页面仍可通过 /slug/ 访问）
 `redirectAs`       重定向本页：声明特殊页，或指向任意地址（见下）
 
 设置 `redirectAs` 后，本页变为重定向 stub：slug URL 提供指向目标
@@ -354,7 +355,11 @@ site/                构建输出（每次构建重新生成）
 - `/` - 首页：内容渲染在文章列表之前（列表带小节标题）；不进导航
 
 所有页面类型（普通页、重定向 stub、特殊页，404 也不例外）默认
-都出现在导航里；`hiddenInNavbar: true` 可隐藏其中任意一个。
+都出现在导航里；`placement: none` 或 `placement: footer` 可从头部
+导航隐藏任意一个。footer 链接渲染在版权行上方，以 `footerSeparator`
+（config，空字符串禁用）分隔；`redirectAs` 为 http(s) URL 的
+footer 页面直链目标。旧 `hiddenInNavbar` 键在构建时被拒绝；
+运行 `burogu format` 迁移。
 
 ### Scripts 脚本
 

@@ -83,7 +83,7 @@ publishOne dir file = do
                         Left err -> pure (Left (T.pack file <> ": " <> err))
                         Right block' -> case normalizeFrontmatter PostKind path block' of
                             Left err -> pure (Left (T.pack file <> ": " <> err))
-                            Right (canonical, _) -> do
+                            Right (canonical, _, _) -> do
                                 let newContent = "---\n" <> canonical <> "---\n" <> body
                                 unless (newContent == content) (TIO.writeFile path newContent)
                                 TIO.putStrLn ("published " <> T.pack path)

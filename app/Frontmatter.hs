@@ -33,7 +33,7 @@ warning). Returns the rendered block and the unknown keys. The
 filename supplies the date (posts) and the slug (title default). An
 empty block yields a fully-defaulted frontmatter.
 -}
-normalizeFrontmatter :: Kind -> FilePath -> Text -> Either Text (Text, [Text])
+normalizeFrontmatter :: Kind -> FilePath -> Text -> Either Text (Text, [Text], [Text])
 normalizeFrontmatter kind filename block = do
     object <- case decodeEither' (encodeUtf8 block) of
         Right (Object o) -> pure o
@@ -52,7 +52,7 @@ normalizeFrontmatter kind filename block = do
         Just d -> T.stripPrefix (d <> "-") n
         Nothing -> Nothing
 
-    normalizePost :: KM.KeyMap Value -> Either Text (Text, [Text])
+    normalizePost :: KM.KeyMap Value -> Either Text (Text, [Text], [Text])
     normalizePost object = do
         title <- fromMaybe slug <$> strOpt "title" object
         mDate <- strOpt "date" object
@@ -73,25 +73,40 @@ normalizeFrontmatter kind filename block = do
                                 <> maybe [] (\d -> [("description", d)]) mDescription
                                 <> [("draft", showBool draft)]
                                 <> [("toc", showBool toc)]
-                 in Right (render (known <> unknownPairs object ["title", "date", "tags", "description", "draft", "toc"]), unknownKeys object ["title", "date", "tags", "description", "draft", "toc"])
+                 in Right (render (known <> unknownPairs object ["title", "date", "tags", "description", "draft", "toc"]), unknownKeys object ["title", "date", "tags", "description", "draft", "toc"], [])
 
-    normalizePage :: KM.KeyMap Value -> Either Text (Text, [Text])
+    normalizePage :: KM.KeyMap Value -> Either Text (Text, [Text], [Text])
     normalizePage object = do
         title <- fromMaybe slug <$> strOpt "title" object
         priority <- maybe 100 id <$> intOpt "priority" object
-        hidden <- boolOpt "hiddenInNavbar" object
         mRedirect <- strOpt "redirectAs" object
         mScript <- strOpt "script" object
         mOutput <- strOpt "output" object
+        (placement, migration) <- placementField object
         let known =
                 [ ("title", title)
                 , ("priority", T.pack (show priority))
-                , ("hiddenInNavbar", showBool hidden)
+                , ("placement", placement)
                 ]
                     <> maybe [] (\r -> [("redirectAs", r)]) mRedirect
                     <> maybe [] (\s -> [("script", s)]) mScript
                     <> maybe [] (\o -> [("output", o)]) mOutput
-        Right (render (known <> unknownPairs object ["title", "priority", "hiddenInNavbar", "redirectAs", "script", "output"]), unknownKeys object ["title", "priority", "hiddenInNavbar", "redirectAs", "script", "output"])
+        Right (render (known <> unknownPairs object ["title", "priority", "placement", "hiddenInNavbar", "redirectAs", "script", "output"]), unknownKeys object ["title", "priority", "placement", "hiddenInNavbar", "redirectAs", "script", "output"], migration)
+
+    -- \| The placement field (nav | footer | none, default nav). The
+    --    legacy hiddenInNavbar key is mapped onto placement with a warning.
+    --
+    placementField :: KM.KeyMap Value -> Either Text (Text, [Text])
+    placementField object = case lookupKey "placement" object of
+        Just (String "nav") -> Right ("nav", [])
+        Just (String "footer") -> Right ("footer", [])
+        Just (String "none") -> Right ("none", [])
+        Just _ -> Left "invalid placement in frontmatter: expected nav, footer or none"
+        Nothing -> case lookupKey "hiddenInNavbar" object of
+            Nothing -> Right ("nav", [])
+            Just (Bool True) -> Right ("none", ["migrated hiddenInNavbar: true to placement: none"])
+            Just (Bool False) -> Right ("nav", ["migrated hiddenInNavbar: false to placement: nav"])
+            Just _ -> Left "invalid hiddenInNavbar in frontmatter: expected true or false"
 
     strOpt :: Text -> KM.KeyMap Value -> Either Text (Maybe Text)
     strOpt key object = case lookupKey key object of

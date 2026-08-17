@@ -5,6 +5,7 @@ siteDescription: A blog generated with burogu  # site description (HTML meta tag
 siteLang: zh-CN  # page language code, e.g. en or zh-CN
 siteCopyright: © Your Name  # footer copyright
 siteGeneratedBy: Generated with Burogu  # footer credit; set to null to hide
+footerSeparator:  ·   # separator between footer links; set to empty to disable
 # deploy:
 #   target: user@host:/var/www/lizi.moe      # rsync deployment (VPS); either target or repo
 #   repo: git@github.com:user/site.git       # git deployment (GitHub Pages etc.)

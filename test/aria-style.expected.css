@@ -188,6 +188,19 @@ time
   display         : flex;
   justify-content : space-between;
   align-items     : baseline;
+  flex-wrap       : wrap;
+}
+
+.footer-links
+{
+  flex-basis : 100%;
+  font-size  : calc(var(--font-size) * 0.9);
+}
+
+
+.footer-links a
+{
+  color : var(--color-link);
 }
 
 .theme-toggle

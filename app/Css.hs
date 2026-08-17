@@ -331,6 +331,11 @@ baseRules = do
         C.display C.flex
         "justify-content" C.-: "space-between"
         "align-items" C.-: "baseline"
+        "flex-wrap" C.-: "wrap"
+    (".footer-links" :: C.Selector) C.? do
+        "flex-basis" C.-: "100%"
+        "font-size" C.-: "calc(var(--font-size) * 0.9)"
+    (".footer-links" :: C.Selector) C.? C.a C.? ("color" C.-: "var(--color-link)")
     (".theme-toggle" :: C.Selector) C.? do
         "border" C.-: "none"
         "background" C.-: "none"

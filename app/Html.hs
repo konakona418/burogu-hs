@@ -26,8 +26,8 @@ data PageMeta = PageMeta
     , pmHasMath :: Bool
     }
 
-layout :: SiteConfig -> [(Text, Text)] -> PageMeta -> L.Html () -> L.Html ()
-layout cfg navPages meta body =
+layout :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> PageMeta -> L.Html () -> L.Html ()
+layout cfg navPages footerLinks meta body =
     L.doctype_
         *> L.html_
             [L.lang_ (siteLang cfg)]
@@ -49,6 +49,7 @@ layout cfg navPages meta body =
                         mapM_ renderNavPage navPages
                     L.main_ body
                     L.footer_ [L.class_ "site-footer"] $ do
+                        L.nav_ [L.class_ "footer-links"] $ renderFooterLinks (siteFooterSeparator cfg) footerLinks
                         L.p_ $ do
                             L.toHtml (siteCopyright cfg)
                             maybe (pure ()) renderCredit (siteGeneratedBy cfg)
@@ -57,6 +58,14 @@ layout cfg navPages meta body =
   where
     renderCredit :: Text -> L.Html ()
     renderCredit credit = L.toHtml (" · " :: Text) >> L.toHtml credit
+
+    renderFooterLinks :: Text -> [(Text, Text)] -> L.Html ()
+    renderFooterLinks _ [] = pure ()
+    renderFooterLinks _ [(label, href)] = L.a_ [L.href_ href] (L.toHtml label)
+    renderFooterLinks separator ((label, href) : rest) = do
+        L.a_ [L.href_ href] (L.toHtml label)
+        L.toHtml separator
+        renderFooterLinks separator rest
 
 renderOg :: SiteConfig -> PageMeta -> L.Html ()
 renderOg cfg meta = do
@@ -101,11 +110,11 @@ codeScript = decodeUtf8 $(embedFile "js/code.js")
 renderNavPage :: (Text, Text) -> L.Html ()
 renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
 
-renderCustomPage :: SiteConfig -> [(Text, Text)] -> PageMeta -> CustomPage -> L.Html ()
-renderCustomPage cfg navPages meta page = layout cfg navPages meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
+renderCustomPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> PageMeta -> CustomPage -> L.Html ()
+renderCustomPage cfg navPages footerLinks meta page = layout cfg navPages footerLinks meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
 
-render404 :: SiteConfig -> [(Text, Text)] -> L.Html ()
-render404 cfg navPages = layout cfg navPages pageMeta $ L.div_ [L.class_ "not-found"] $ do
+render404 :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> L.Html ()
+render404 cfg navPages footerLinks = layout cfg navPages footerLinks pageMeta $ L.div_ [L.class_ "not-found"] $ do
     L.h1_ (L.toHtml ("404" :: Text))
     L.p_ (L.toHtml (t lang "notFoundTitle"))
     L.p_ (L.toHtml (t lang "notFoundBody"))
@@ -118,8 +127,8 @@ render404 cfg navPages = layout cfg navPages pageMeta $ L.div_ [L.class_ "not-fo
 {- | The archive page: all posts grouped into year sections, newest
 first. Posts must already be sorted by date descending.
 -}
-renderArchive :: SiteConfig -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
-renderArchive cfg navPages title posts = layout cfg navPages pageMeta (mapM_ yearSection (groupByYear posts))
+renderArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
+renderArchive cfg navPages footerLinks title posts = layout cfg navPages footerLinks pageMeta (mapM_ yearSection (groupByYear posts))
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = title, pmOgType = "website", pmOgPath = "/archive/", pmOgDescription = Nothing, pmHasMath = False}
@@ -156,8 +165,8 @@ renderRedirect cfg target =
   where
     lang = fromSiteLang (siteLang cfg)
 
-renderIndex :: SiteConfig -> [(Text, Text)] -> Maybe CustomPage -> [Post] -> L.Html ()
-renderIndex cfg navPages mIndexPage posts = layout cfg navPages pageMeta $ do
+renderIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Maybe CustomPage -> [Post] -> L.Html ()
+renderIndex cfg navPages footerLinks mIndexPage posts = layout cfg navPages footerLinks pageMeta $ do
     case mIndexPage of
         Nothing -> L.ul_ [L.class_ "post-list"] (mapM_ item posts)
         Just page -> do
@@ -176,8 +185,8 @@ renderIndex cfg navPages mIndexPage posts = layout cfg navPages pageMeta $ do
             renderTags (postTags post)
             maybe (pure ()) renderDescription (postDescription post)
 
-renderPost :: SiteConfig -> [(Text, Text)] -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
-renderPost cfg navPages neighbors post = layout cfg navPages pageMeta $ L.article_ $ do
+renderPost :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
+renderPost cfg navPages footerLinks neighbors post = layout cfg navPages footerLinks pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml (postTitle post))
     L.p_ [L.class_ "post-meta"] $ do
         L.time_ (L.toHtml (postDate post))
@@ -224,8 +233,8 @@ readingMinutes post =
         wordCount = length (T.words text)
      in max 1 (max (chars `div` 400) (wordCount `div` 200))
 
-renderTagIndex :: SiteConfig -> [(Text, Text)] -> Text -> [(Text, [Post])] -> L.Html ()
-renderTagIndex cfg navPages label groups = layout cfg navPages pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
+renderTagIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [(Text, [Post])] -> L.Html ()
+renderTagIndex cfg navPages footerLinks label groups = layout cfg navPages footerLinks pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = label, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
@@ -235,8 +244,8 @@ renderTagIndex cfg navPages label groups = layout cfg navPages pageMeta $ L.ul_ 
             L.a_ [L.class_ "tag-name", L.href_ (tagUrl tag)] (L.toHtml tag)
             L.span_ [L.class_ "tag-count"] (L.toHtml ("(" <> T.pack (show (length posts)) <> ")"))
 
-renderTagArchive :: SiteConfig -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
-renderTagArchive cfg navPages tag posts = layout cfg navPages pageMeta $ L.article_ $ do
+renderTagArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
+renderTagArchive cfg navPages footerLinks tag posts = layout cfg navPages footerLinks pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml tag)
     L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where

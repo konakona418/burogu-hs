@@ -217,7 +217,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 記事には `title, date, tags, description, draft, toc` が付きます
 （frontmatter に日付がない場合はファイル名プレフィックスから
 取得。下書きは日付を省略可）。ページには `title, priority,
-hiddenInNavbar, redirectAs` が付きます。空の `description`/
+placement, redirectAs` が付きます。空の `description`/
 `redirectAs` は書き込みません。未知の frontmatter キーは
 （辞書順で）保持され警告が出ます。frontmatter 内のコメントは
 保持されません。
@@ -376,8 +376,10 @@ site/                生成出力（生成のたびに作り直される）
 `title`            ナビゲーションラベルとページタイトル
 `priority`         ナビゲーション位置。小さい方が先（負の値で先頭に固定）
                    （デフォルト：100）
-`hiddenInNavbar`   `true` でナビゲーションから外す（/slug/ では
-                   アクセス可能）
+`placement`       ページリンクの表示位置: `nav`（デフォルト、
+                   ヘッダーナビ）、`footer`（フッターのリンク行）
+                   または `none`（どこにも表示しない。ページ自体
+                   は /slug/ でアクセス可能）
 `redirectAs`       このページをリダイレクトする：特殊ページを
                    宣言するか、任意のアドレスを指定（下記参照）
 
@@ -403,7 +405,12 @@ site/                生成出力（生成のたびに作り直される）
 
 すべてのページタイプ（通常ページ、リダイレクトスタブ、特殊
 ページ、404 も含む）はデフォルトでナビゲーションに表示され、
-`hiddenInNavbar: true` で任意のものを非表示にできます。
+`placement: none` または `placement: footer` でヘッダーから
+非表示にできます。フッターリンクは著作権行の上に
+`footerSeparator`（config。空文字で無効）区切りで表示され、
+`redirectAs` が http(s) URL のフッターページは直接リンクします。
+旧 `hiddenInNavbar` キーはビルド時に拒否されます。
+`burogu format` で移行してください。
 
 ### Scripts スクリプト
 

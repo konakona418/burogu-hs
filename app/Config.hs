@@ -24,6 +24,7 @@ data SiteConfig = SiteConfig
     , siteBaseUrl :: Maybe Text
     , siteCopyright :: Text
     , siteGeneratedBy :: Maybe Text
+    , siteFooterSeparator :: Text
     , siteDeploy :: DeployConfig
     , siteSrcRepo :: Maybe Text
     , siteTheme :: Theme
@@ -58,6 +59,7 @@ data RawConfig = RawConfig
     , rawTagsLabel :: Maybe Text
     , rawCopyright :: Maybe Text
     , rawGeneratedBy :: Maybe Text
+    , rawFooterSeparator :: Maybe Text
     , rawDeploy :: Maybe RawDeploy
     , rawSrcRepo :: Maybe Text
     , rawTheme :: Maybe RawTheme
@@ -91,6 +93,7 @@ instance FromJSON RawConfig where
             <*> object .:? "tagsLabel"
             <*> object .:? "siteCopyright"
             <*> object .:? "siteGeneratedBy"
+            <*> object .:? "footerSeparator"
             <*> object .:? "deploy"
             <*> object .:? "srcRepo"
             <*> object .:? "theme"
@@ -147,8 +150,9 @@ loadConfig path = do
         baseUrl <- resolveBaseUrl (rawBaseUrl raw)
         rejectTagsLabel (rawTagsLabel raw)
         copyright <- field "siteCopyright" (rawCopyright raw) ("© " <> author)
+        separator <- field "footerSeparator" (rawFooterSeparator raw) " · "
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteFooterSeparator = separator, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
 
 rejectTagsLabel :: Maybe Text -> IO ()
 rejectTagsLabel Nothing = pure ()

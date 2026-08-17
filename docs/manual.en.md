@@ -212,7 +212,7 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 Posts get `title, date, tags, description, draft, toc` (the date comes
 from the filename prefix when the frontmatter has none; drafts may
-omit it). Pages get `title, priority, hiddenInNavbar, redirectAs`.
+omit it). Pages get `title, priority, placement, redirectAs`.
 Empty `description`/`redirectAs` fields are not written. Unknown
 frontmatter keys are kept (sorted) with a warning; comments in the
 frontmatter are not preserved.
@@ -369,8 +369,10 @@ in the navigation:
 `title`            navigation label and page title
 `priority`         navigation position, lower first (default: 100;
                    negative values pin the page to the top)
-`hiddenInNavbar`   `true` keeps the page out of the navigation (it
-                   stays reachable at /slug/)
+`placement`        where the page's link appears: `nav` (default,
+                   header navigation), `footer` (the footer link
+                   row) or `none` (nowhere; the page stays
+                   reachable at /slug/)
 `redirectAs`       redirect this page: declare a special page, or
                    point anywhere else (see below)
 
@@ -394,8 +396,12 @@ markdown body:
   (which gets a section title); the page is not in the navigation
 
 Every page type (normal, redirect stub, special) appears in the
-navigation by default, 404 included; `hiddenInNavbar: true` hides
-any of them.
+navigation by default, 404 included; `placement: none` or
+`placement: footer` hides any of them from the header. Footer
+links render above the copyright, separated by `footerSeparator`
+(config; empty to disable); a footer page whose `redirectAs` is an
+http(s) URL links straight to it. The legacy `hiddenInNavbar` key
+is rejected at build time; run `burogu format` to migrate.
 
 ### Scripts
 

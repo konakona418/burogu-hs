@@ -79,8 +79,9 @@ formatOne dryRun dir kind filename = do
         Left err -> do
             reportError (T.pack path <> ": " <> err)
             pure True
-        Right (normalized, unknownKeys) -> do
+        Right (normalized, unknownKeys, warnings) -> do
             mapM_ (\k -> reportWarning (path <> ":") k "kept as-is") unknownKeys
+            mapM_ (reportNote (T.pack path <> ":")) warnings
             let newContent = "---\n" <> normalized <> "---\n" <> body
             if newContent == content
                 then pure False
@@ -104,6 +105,7 @@ configValues raw =
             , ("siteLang", rawLang raw ?: "zh-CN")
             , ("siteCopyright", rawCopyright raw ?: "© Your Name")
             , ("siteGeneratedBy", rawGeneratedBy raw ?: "Generated with Burogu")
+            , ("footerSeparator", rawFooterSeparator raw ?: " · ")
             ]
         , cvDeploy = case rawDeploy raw of
             Nothing -> Nothing
@@ -182,6 +184,7 @@ knownConfigKeys =
     , "siteLang"
     , "siteCopyright"
     , "siteGeneratedBy"
+    , "footerSeparator"
     , "tagsLabel"
     , "deploy"
     , "srcRepo"
@@ -197,6 +200,9 @@ warnUnknownConfigKeys prefix content =
 
 reportError :: Text -> IO ()
 reportError = TIO.hPutStrLn stderr . ("error: " <>)
+
+reportNote :: Text -> Text -> IO ()
+reportNote prefix note = TIO.hPutStrLn stderr (prefix <> " warning: " <> note)
 
 reportWarning :: String -> Text -> String -> IO ()
 reportWarning prefix key disposition =

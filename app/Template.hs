@@ -61,6 +61,7 @@ defaultConfigTemplate =
             , TemplateLine "siteLang" "zh-CN" (Just "# page language code, e.g. en or zh-CN")
             , TemplateLine "siteCopyright" "© Your Name" (Just "# footer copyright")
             , TemplateLine "siteGeneratedBy" "Generated with Burogu" (Just "# footer credit; set to null to hide")
+            , TemplateLine "footerSeparator" " · " (Just "# separator between footer links; set to empty to disable")
             ]
         , ctDeployComment =
             T.unlines

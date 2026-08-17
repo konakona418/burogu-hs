@@ -26,12 +26,12 @@ import I18n (UILang (..), fromSiteLang, messages, tWith)
 import Lexer (lexTokens)
 import Lucid qualified as L
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
-import Page (CustomPage (..), loadPage, loadPages)
+import Page (CustomPage (..), Placement (..), loadPage, loadPages)
 import Parser (parseProgram)
 import Paths_burogu ()
 import Post (Post (..), TocEntry (..), mathMethod, parsePost, warnCaseTags)
 import Posts (runDraft, runNew, runPublish)
-import Registry (SitePages (..), classifyPages, navItems)
+import Registry (SitePages (..), classifyPages, footerItems, navItems)
 import Scripts (evalScript, scriptCtx)
 import Search (renderSearch, renderSearchIndex)
 import Shaft (presetByName, presetNames, shaftPreset)
@@ -150,9 +150,13 @@ tests =
             , classifyInvalidRedirectAs
             , classifyDuplicateSpecial
             , classifyCollision
-            , hiddenInNavbarParsed
-            , hiddenInNavbarFiltersNav
+            , placementParsed
+            , placementFiltersNav
             , redirectStubNavVisibility
+            , footerItemsTest
+            , footerLinksRendered
+            , footerSeparatorConfig
+            , formatMigrationTest
             , notFoundInNavByDefault
             , navPriorityOrder
             , navPriorityTieLexicographic
@@ -326,7 +330,7 @@ renderPostTocShown :: TestTree
 renderPostTocShown =
     testCase "a toc-enabled post renders the heading list" $ do
         let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
         assertBool "toc nav" ("<nav class=\"toc\">" `textIn` page)
         assertBool "toc link" ("href=\"#second\">Second</a>" `textIn` page)
 
@@ -334,16 +338,16 @@ renderPostTocHidden :: TestTree
 renderPostTocHidden =
     testCase "a post without toc stays clean" $ do
         let post = (postWithTags []){postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
         assertBool "no toc" ("class=\"toc\"" `notTextIn` page)
 
 readingTimeShown :: TestTree
 readingTimeShown =
     testCase "the reading time is shown in the post meta" $ do
         let post = (postWithTags []){postText = T.replicate 900 "字"}
-            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
         assertBool "zh label" ("约 2 分钟" `textIn` page)
-        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] (Nothing, Nothing) post)
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] (Nothing, Nothing) post)
         assertBool "en label" ("min read" `textIn` enPage)
 
 postNavRendered :: TestTree
@@ -351,21 +355,21 @@ postNavRendered =
     testCase "prev and next posts are linked at the bottom" $ do
         let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
             newer = (postWithTags []){postSlug = "newer", postTitle = "Newer", postDate = "2026-03-01"}
-            page = renderHtml (renderPost testConfig [] (Just newer, Just older) (postWithTags []))
+            page = renderHtml (renderPost testConfig [] [] (Just newer, Just older) (postWithTags []))
         assertBool "prev label" ("上一篇" `textIn` page)
         assertBool "next label" ("下一篇" `textIn` page)
         assertBool "prev link" ("href=\"/posts/newer/\">Newer</a>" `textIn` page)
         assertBool "next link" ("href=\"/posts/older/\">Older</a>" `textIn` page)
         assertBool "no arrows" ("←" `notTextIn` page && "→" `notTextIn` page)
-        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] (Just newer, Just older) (postWithTags []))
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] (Just newer, Just older) (postWithTags []))
         assertBool "en labels" ("Previous" `textIn` enPage && "Next" `textIn` enPage)
 
 postNavSingleSide :: TestTree
 postNavSingleSide =
     testCase "one-sided nav renders without a dangling separator" $ do
         let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
-        assertEqual "neither side" False ("post-nav" `textIn` renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags [])))
-        let onlyNext = renderHtml (renderPost testConfig [] (Nothing, Just older) (postWithTags []))
+        assertEqual "neither side" False ("post-nav" `textIn` renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags [])))
+        let onlyNext = renderHtml (renderPost testConfig [] [] (Nothing, Just older) (postWithTags []))
         assertBool "next only" ("post-nav-next" `textIn` onlyNext)
         assertBool "no prev" ("post-nav-prev" `notTextIn` onlyNext)
         assertBool "pushed right" ("margin-left:auto" `notTextIn` onlyNext)
@@ -378,7 +382,7 @@ formatTocKey =
     testCase "format recognizes the toc key" $ do
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-t.md" "title: X\ntoc: true\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, unknown) -> do
+            Right (fm, unknown, _) -> do
                 assertEqual "toc kept" "title: X\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: true\n" fm
                 assertEqual "not unknown" [] unknown
 
@@ -386,7 +390,7 @@ tocLevelClasses :: TestTree
 tocLevelClasses =
     testCase "toc entries carry level classes" $ do
         let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
         assertBool "level class" ("toc-level-2" `textIn` page)
 
 contentElementStyles :: TestTree
@@ -401,7 +405,7 @@ contentElementStyles =
 searchNoResults :: TestTree
 searchNoResults =
     testCase "the search page ships a no-results hint" $ do
-        let page = renderHtml (renderSearch testConfig [] "搜索")
+        let page = renderHtml (renderSearch testConfig [] [] "搜索")
         assertBool "hint element" ("search-no-results" `textIn` page)
         assertBool "hidden initially" ("hidden" `textIn` page)
         assertBool "script toggles it" ("showResults" `textIn` page)
@@ -409,7 +413,7 @@ searchNoResults =
 codeScriptInjected :: TestTree
 codeScriptInjected =
     testCase "every page ships the code-block script" $ do
-        let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags []))
+        let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags []))
         assertBool "copy logic" ("copy-button" `textIn` page)
         assertBool "lang extraction" ("langNames" `textIn` page)
         assertBool "clipboard" ("clipboard" `textIn` page)
@@ -455,12 +459,12 @@ i18nPlaceholders =
 i18nPageOutput :: TestTree
 i18nPageOutput =
     testCase "pages localize per siteLang" $ do
-        let zhPage = renderHtml (renderPost testConfig [] (Nothing, Nothing) ((postWithTags []){postText = T.replicate 900 "字"}))
+        let zhPage = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) ((postWithTags []){postText = T.replicate 900 "字"}))
         assertBool "zh reading time" ("约 2 分钟" `textIn` zhPage)
-        let enPage = renderHtml (renderIndex testConfig{siteLang = "en"} [] (Just (mkPage (Just "Home") 0 Nothing)) [])
+        let enPage = renderHtml (renderIndex testConfig{siteLang = "en"} [] [] (Just (mkPage (Just "Home") 0 Nothing)) [])
         assertBool "en section title" ("Posts" `textIn` enPage)
-        assertBool "zh section title" ("文章" `textIn` renderHtml (renderIndex testConfig [] (Just (mkPage (Just "Home") 0 Nothing)) []))
-        let zh404 = renderHtml (render404 testConfig [])
+        assertBool "zh section title" ("文章" `textIn` renderHtml (renderIndex testConfig [] [] (Just (mkPage (Just "Home") 0 Nothing)) []))
+        let zh404 = renderHtml (render404 testConfig [] [])
         assertBool "zh 404" ("页面不存在" `textIn` zh404)
 
 indexSpecialPageClassified :: TestTree
@@ -474,7 +478,7 @@ indexSpecialPageClassified =
 indexPageRenderedOnHome :: TestTree
 indexPageRenderedOnHome =
     testCase "the index page renders above the post list" $ do
-        let page = renderHtml (renderIndex testConfig [] (Just (mkPage (Just "Home") 0 Nothing)) [postWithTags []])
+        let page = renderHtml (renderIndex testConfig [] [] (Just (mkPage (Just "Home") 0 Nothing)) [postWithTags []])
         assertBool "index body" ("<div class=\"post-body index-body\">" `textIn` page)
         assertBool "section title" ("index-title" `textIn` page)
         assertBool "post list" ("post-list" `textIn` page)
@@ -501,7 +505,7 @@ darkThemeAttributeSelectors =
 themeToggleScriptInjected :: TestTree
 themeToggleScriptInjected =
     testCase "every page carries the theme toggle script" $ do
-        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
         assertBool "script" ("burogu-theme" `textIn` page)
         assertBool "footer target" ("site-footer" `textIn` page)
         assertBool "button rendered" ("theme-toggle" `textIn` page)
@@ -731,7 +735,7 @@ mathjaxInlineMath =
             assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
             assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
             assertBool "post marked as having math" (postHasMath post)
-            let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
             assertBool "script injected in page" ("<script" `textIn` page)
             assertBool "mathjax URL" ("mathjax" `textIn` page)
 
@@ -742,7 +746,7 @@ mathjaxNoMathNoScript =
         assertRight result $ \post -> do
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             assertBool "not marked as having math" (not (postHasMath post))
-            let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) post)
+            let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
             assertBool "no math script in page" ("katex.min.js" `notTextIn` page)
             assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
@@ -754,7 +758,7 @@ plainMathNoScript =
             assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
-                page = renderHtml (renderPost noMathConfig [] (Nothing, Nothing) post)
+                page = renderHtml (renderPost noMathConfig [] [] (Nothing, Nothing) post)
             assertBool "no katex in page" ("katex.min.js" `notTextIn` page)
             assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
@@ -769,13 +773,13 @@ mathMethodMapping =
 tagsLabelCustomized :: TestTree
 tagsLabelCustomized =
     testCase "tag index title comes from the tags page title" $ do
-        let page = renderHtml (renderTagIndex testConfig [] "标签" [("essay", [postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] [] "标签" [("essay", [postWithTags ["essay"]])])
         assertBool "index title" ("<title>标签</title>" `textIn` page)
 
 tagArchiveTitleIsTagName :: TestTree
 tagArchiveTitleIsTagName =
     testCase "tag archive title is the bare tag name" $ do
-        let page = renderHtml (renderTagArchive testConfig [] "essay" [postWithTags ["essay"]])
+        let page = renderHtml (renderTagArchive testConfig [] [] "essay" [postWithTags ["essay"]])
         assertBool "title" ("<title>essay</title>" `textIn` page)
         assertBool "no prefix" ("Tag:" `notTextIn` page)
 
@@ -862,7 +866,7 @@ searchInputFocusStyled =
 viewportFitCover :: TestTree
 viewportFitCover =
     testCase "viewport meta opts into full-screen safe areas" $ do
-        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
         assertBool "viewport-fit=cover" ("viewport-fit=cover" `textIn` page)
 
 cssExtraCssAppended :: TestTree
@@ -993,19 +997,19 @@ fontsFromJson =
 siteNameClass :: TestTree
 siteNameClass =
     testCase "site name link carries the site-name class" $ do
-        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
         assertBool "site-name" ("class=\"site-name\"" `textIn` page)
 
 tagSeparatorSpan :: TestTree
 tagSeparatorSpan =
     testCase "tag separators are styled spans" $ do
-        let page = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags ["essay", "life"]))
+        let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags ["essay", "life"]))
         assertBool "separator span" ("<span class=\"post-tag-sep\"> · </span>" `textIn` page)
 
 tagCountHook :: TestTree
 tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
-        let page = renderHtml (renderTagIndex testConfig [] "Tags" [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] [] "Tags" [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
 
 cliDefaults :: TestTree
@@ -1071,7 +1075,7 @@ robotsContent =
 notFoundPage :: TestTree
 notFoundPage =
     testCase "404 page renders with a home link" $ do
-        let page = renderHtml (render404 testConfig [])
+        let page = renderHtml (render404 testConfig [] [])
         assertBool "title" ("<title>404</title>" `textIn` page)
         assertBool "heading" ("<h1>404</h1>" `textIn` page)
         assertBool "home link" ("href=\"/\"" `textIn` page)
@@ -1086,9 +1090,9 @@ extraJsInjected :: TestTree
 extraJsInjected =
     testCase "extra JS files are injected as deferred scripts on every page" $ do
         let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
-        let page = renderHtml (renderIndex jsConfig [] Nothing [])
+        let page = renderHtml (renderIndex jsConfig [] [] Nothing [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
-        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] Nothing []))
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] [] Nothing []))
 
 serverParsePath :: TestTree
 serverParsePath =
@@ -1149,31 +1153,31 @@ customPageHasMath =
 aboutNavShown :: TestTree
 aboutNavShown =
     testCase "about link appears in the nav when present" $ do
-        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] Nothing [])
+        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] [] Nothing [])
         assertBool "nav link" ("href=\"/about/\">About Me" `textIn` page)
 
 aboutNavHidden :: TestTree
 aboutNavHidden =
     testCase "no about link without an about page" $ do
-        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
         assertBool "no link" ("/about/" `notTextIn` page)
 
 copyrightCustom :: TestTree
 copyrightCustom =
     testCase "footer uses the configurable copyright" $ do
-        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [] Nothing [])
         assertBool "custom copyright" ("自定义版权" `textIn` page)
 
 footerCreditShown :: TestTree
 footerCreditShown =
     testCase "footer shows the configured generator credit on the same line" $ do
-        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [] Nothing [])
         assertBool "joined line" ("© moe li · Generated with Burogu" `textIn` page)
 
 footerCreditHidden :: TestTree
 footerCreditHidden =
     testCase "footer omits the generator credit when unset" $ do
-        let page = renderHtml (renderIndex testConfig [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
         assertBool "no credit text" ("site-credit" `notTextIn` page)
 
 loadPagesFromDir :: TestTree
@@ -1209,7 +1213,7 @@ loadPagesErrorAggregation =
 navMultiplePages :: TestTree
 navMultiplePages =
     testCase "nav renders multiple pages in order" $ do
-        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] Nothing [])
+        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] [] Nothing [])
         assertBool "about link" ("href=\"/about/\">About" `textIn` page)
         assertBool "projects link" ("href=\"/projects/\">Projects" `textIn` page)
         let aboutPos = findSubstring "href=\"/about/\"" page
@@ -1256,10 +1260,10 @@ pageRedirectAsParsed =
             _ -> assertBool "expected a page" False
 
 mkPage :: Maybe Text -> Int -> Maybe Text -> CustomPage
-mkPage title priority redirect = mkPageHidden title priority redirect False
+mkPage title priority redirect = mkPageHidden title priority redirect PlNav
 
-mkPageHidden :: Maybe Text -> Int -> Maybe Text -> Bool -> CustomPage
-mkPageHidden title priority redirect hidden = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpHiddenInNavbar = hidden, cpScript = Nothing, cpOutput = Nothing, cpText = ""}
+mkPageHidden :: Maybe Text -> Int -> Maybe Text -> Placement -> CustomPage
+mkPageHidden title priority redirect placement = CustomPage{cpTitle = title, cpBodyHtml = "", cpHasMath = False, cpPriority = priority, cpRedirectAs = redirect, cpPlacement = placement, cpScript = Nothing, cpOutput = Nothing, cpText = ""}
 
 classifySpecialPages :: TestTree
 classifySpecialPages =
@@ -1326,25 +1330,36 @@ classifyCollision =
             Left errs -> assertBool "message" (any ("collides with the declared special URL '/tags/'" `T.isInfixOf`) errs)
             Right _ -> assertBool "expected failure" False
 
-hiddenInNavbarParsed :: TestTree
-hiddenInNavbarParsed =
-    testCase "pages read the frontmatter hiddenInNavbar" $ do
-        writeFile "/tmp/burogu-test/hidden.md" "---\nhiddenInNavbar: true\n---\n# P\n"
-        writeFile "/tmp/burogu-test/visible.md" "---\n# P\n"
-        result <- loadPage plainMath "/tmp/burogu-test/hidden.md"
+placementParsed :: TestTree
+placementParsed =
+    testCase "pages read the frontmatter placement" $ do
+        writeFile "/tmp/burogu-test/footer.md" "---\nplacement: footer\n---\n# P\n"
+        writeFile "/tmp/burogu-test/default.md" "---\n# P\n"
+        writeFile "/tmp/burogu-test/legacy.md" "---\nhiddenInNavbar: true\n---\n# P\n"
+        result <- loadPage plainMath "/tmp/burogu-test/footer.md"
         case result of
-            Right (Just page) -> assertEqual "hidden" True (cpHiddenInNavbar page)
+            Right (Just page) -> assertEqual "footer" PlFooter (cpPlacement page)
             _ -> assertBool "expected a page" False
-        result2 <- loadPage plainMath "/tmp/burogu-test/visible.md"
+        result2 <- loadPage plainMath "/tmp/burogu-test/default.md"
         case result2 of
-            Right (Just page) -> assertEqual "visible" False (cpHiddenInNavbar page)
+            Right (Just page) -> assertEqual "default nav" PlNav (cpPlacement page)
             _ -> assertBool "expected a page" False
+        result3 <- loadPage plainMath "/tmp/burogu-test/legacy.md"
+        case result3 of
+            Left err -> assertBool "legacy rejected" ("hiddenInNavbar" `T.isInfixOf` err)
+            _ -> assertBool "expected a legacy-field error" False
+        writeFile "/tmp/burogu-test/bad.md" "---\nplacement: sidebar\n---\n# P\n"
+        result4 <- loadPage plainMath "/tmp/burogu-test/bad.md"
+        case result4 of
+            Left _ -> pure ()
+            _ -> assertBool "expected failure" False
 
-hiddenInNavbarFiltersNav :: TestTree
-hiddenInNavbarFiltersNav =
-    testCase "hiddenInNavbar pages stay out of the nav" $ do
+placementFiltersNav :: TestTree
+placementFiltersNav =
+    testCase "placement none and footer pages stay out of the nav" $ do
         let pages =
-                [ ("secret", mkPageHidden (Just "Secret") 10 Nothing True)
+                [ ("secret", mkPageHidden (Just "Secret") 10 Nothing PlNone)
+                , ("foot", mkPageHidden (Just "Foot") 5 Nothing PlFooter)
                 , ("public", mkPage (Just "Public") 20 Nothing)
                 ]
         case classifyPages pages of
@@ -1353,9 +1368,9 @@ hiddenInNavbarFiltersNav =
 
 redirectStubNavVisibility :: TestTree
 redirectStubNavVisibility =
-    testCase "redirect stubs follow the hiddenInNavbar rule" $ do
+    testCase "redirect stubs follow the placement rule" $ do
         let visible = [("old", mkPage (Just "Old") 0 (Just "/new/"))]
-            hidden = [("old", mkPageHidden (Just "Old") 0 (Just "/new/") True)]
+            hidden = [("old", mkPageHidden (Just "Old") 0 (Just "/new/") PlNone)]
         case classifyPages visible of
             Right sp -> assertEqual "stub visible by default" [("/old/", "Old")] (map (\(l, h) -> (h, l)) (navItems sp))
             Left _ -> assertBool "expected success" False
@@ -1370,7 +1385,7 @@ notFoundInNavByDefault =
         case classifyPages pages of
             Right sp -> assertEqual "404 in nav" [("/404.html", "Oops")] (map (\(l, h) -> (h, l)) (navItems sp))
             Left _ -> assertBool "expected success" False
-        let hidden = [("404", mkPageHidden (Just "Oops") 0 (Just "/404.html") True)]
+        let hidden = [("404", mkPageHidden (Just "Oops") 0 (Just "/404.html") PlNone)]
         case classifyPages hidden of
             Right sp -> assertEqual "404 hidden" [] (navItems sp)
             Left _ -> assertBool "expected success" False
@@ -1427,7 +1442,7 @@ archiveYearGroups =
                 , (postWithTags []){postDate = "2026-01-01", postTitle = "Mid"}
                 , (postWithTags []){postDate = "2025-12-31", postTitle = "Old"}
                 ]
-        let page = renderHtml (renderArchive testConfig [] "Archive" posts)
+        let page = renderHtml (renderArchive testConfig [] [] "Archive" posts)
         assertBool "2026 section" ("<h2 class=\"archive-year\">2026</h2>" `textIn` page)
         assertBool "2025 section" ("<h2 class=\"archive-year\">2025</h2>" `textIn` page)
         assertBool "title" ("<title>Archive</title>" `textIn` page)
@@ -1490,7 +1505,7 @@ searchIndexExcludesSpecials =
 searchPageRendered :: TestTree
 searchPageRendered =
     testCase "search page renders input and results container" $ do
-        let page = renderHtml (renderSearch testConfig [] "Search")
+        let page = renderHtml (renderSearch testConfig [] [] "Search")
         assertBool "title" ("<title>Search</title>" `textIn` page)
         assertBool "input" ("class=\"search-input\"" `textIn` page)
         assertBool "results" ("id=\"search-results\"" `textIn` page)
@@ -1498,7 +1513,7 @@ searchPageRendered =
 searchPageScript :: TestTree
 searchPageScript =
     testCase "search page script fetches the index and honors the hook" $ do
-        let page = renderHtml (renderSearch testConfig [] "Search")
+        let page = renderHtml (renderSearch testConfig [] [] "Search")
         assertBool "fetch" ("/search.json" `textIn` page)
         assertBool "hook" ("window.buroguSearch" `textIn` page)
         assertBool "default search" ("index.forEach" `textIn` page)
@@ -1625,7 +1640,7 @@ escapedPost =
 ogMetaOnPost :: TestTree
 ogMetaOnPost =
     testCase "post pages carry article OG metadata" $ do
-        let html = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags ["essay"]))
+        let html = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags ["essay"]))
         assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
         assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
@@ -1633,21 +1648,21 @@ ogMetaOnPost =
 ogTypeWebsiteOnIndex :: TestTree
 ogTypeWebsiteOnIndex =
     testCase "index pages carry website OG metadata" $ do
-        let html = renderHtml (renderIndex testConfig [] Nothing [postWithTags ["essay"]])
+        let html = renderHtml (renderIndex testConfig [] [] Nothing [postWithTags ["essay"]])
         assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
 
 ogUrlAbsentWithoutBaseUrl :: TestTree
 ogUrlAbsentWithoutBaseUrl =
     testCase "og:url is omitted without baseUrl" $ do
-        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] Nothing [])
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] [] Nothing [])
         assertBool "no og:url" ("og:url" `notTextIn` html)
         assertBool "og:title still present" ("og:title" `textIn` html)
 
 ogDescriptionFallsBack :: TestTree
 ogDescriptionFallsBack =
     testCase "og:description falls back to siteDescription" $ do
-        let html = renderHtml (renderPost testConfig [] (Nothing, Nothing) (postWithTags []))
+        let html = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags []))
         assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
 
 renderHtml :: L.Html () -> Text
@@ -1663,6 +1678,7 @@ testConfig =
         , siteBaseUrl = Just "https://lizi.moe"
         , siteCopyright = "© moe li"
         , siteGeneratedBy = Nothing
+        , siteFooterSeparator = " · "
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = Theme{themeMath = "mathjax", themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = [], themePreset = "aria", themeFonts = emptyFonts}
@@ -1722,10 +1738,10 @@ frontmatterEmptyFilled =
     testCase "files without frontmatter get one filled in" $ do
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "post defaults" "title: hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n" fm
+            Right (fm, _, _) -> assertEqual "post defaults" "title: hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n" fm
         case normalizeFrontmatter PageKind "/tmp/x/about.md" "" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "page defaults" "title: about\npriority: 100\nhiddenInNavbar: false\n" fm
+            Right (fm, _, _) -> assertEqual "page defaults" "title: about\npriority: 100\nplacement: nav\n" fm
 
 frontmatterMalformedErrors :: TestTree
 frontmatterMalformedErrors =
@@ -1737,7 +1753,7 @@ frontmatterPostDefaults =
     testCase "posts get every field with defaults" $ do
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-hello.md" "title: Post\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, unknown) -> do
+            Right (fm, unknown, _) -> do
                 assertEqual "canonical order" "title: Post\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n" fm
                 assertEqual "no unknown keys" [] unknown
 
@@ -1746,7 +1762,7 @@ frontmatterPageDefaults =
     testCase "pages get every field with defaults" $ do
         case normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "canonical order" "title: About\npriority: 100\nhiddenInNavbar: false\n" fm
+            Right (fm, _, _) -> assertEqual "canonical order" "title: About\npriority: 100\nplacement: nav\n" fm
 
 frontmatterNoDateError :: TestTree
 frontmatterNoDateError =
@@ -1758,26 +1774,26 @@ frontmatterDraftNoDate =
     testCase "a draft without a date omits the date key" $ do
         case normalizeFrontmatter PostKind "/tmp/x/draft.md" "title: X\ndraft: true\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "no date key" "title: X\ntags: []\ndraft: true\ntoc: false\n" fm
+            Right (fm, _, _) -> assertEqual "no date key" "title: X\ntags: []\ndraft: true\ntoc: false\n" fm
 
 frontmatterUnknownKeys :: TestTree
 frontmatterUnknownKeys =
     testCase "unknown keys are kept in sorted order" $ do
         case normalizeFrontmatter PageKind "/tmp/x/p.md" "custom: 42\ntitle: X\naliases: [a, b]\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, unknown) -> do
+            Right (fm, unknown, _) -> do
                 assertEqual "unknown keys" ["aliases", "custom"] unknown
-                assertEqual "kept after known" "title: X\npriority: 100\nhiddenInNavbar: false\naliases:\n  - a\n  - b\ncustom: 42\n" fm
+                assertEqual "kept after known" "title: X\npriority: 100\nplacement: nav\naliases:\n  - a\n  - b\ncustom: 42\n" fm
 
 frontmatterDescriptionOmitted :: TestTree
 frontmatterDescriptionOmitted =
     testCase "an empty description is not written" $ do
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-p.md" "title: X\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertBool "no description" ("description" `notTextIn` fm)
+            Right (fm, _, _) -> assertBool "no description" ("description" `notTextIn` fm)
         case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-p.md" "title: X\ndescription: Hello\n" of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
-            Right (fm, _) -> assertEqual "description written" "title: X\ndate: 2026-08-01\ntags: []\ndescription: Hello\ndraft: false\ntoc: false\n" fm
+            Right (fm, _, _) -> assertEqual "description written" "title: X\ndate: 2026-08-01\ntags: []\ndescription: Hello\ndraft: false\ntoc: false\n" fm
 
 configTemplateGolden :: TestTree
 configTemplateGolden =
@@ -2064,13 +2080,13 @@ scriptFrontmatterField =
         result <- pure (normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\noutput: data.json\n")
         case result of
             Left err -> assertBool ("expected success, got " <> T.unpack err) False
-            Right (block, _) -> do
+            Right (block, _, _) -> do
                 assertBool "script kept" ("script: hello.d" `textIn` block)
                 assertBool "output kept" ("output: data.json" `textIn` block)
                 assertBool "known keys" (not ("unknown" `T.isInfixOf` block))
         case normalizeFrontmatter PageKind "/tmp/x/about.md" "title: About\nscript: hello.d\n" of
             Left err -> assertBool ("expected success, got " <> T.unpack err) False
-            Right (block, _) -> assertBool "output omitted when empty" (not ("output" `T.isInfixOf` block))
+            Right (block, _, _) -> assertBool "output omitted when empty" (not ("output" `T.isInfixOf` block))
 
 buildScriptPage :: TestTree
 buildScriptPage =
@@ -2266,3 +2282,46 @@ scriptDataIgnoresOthers =
             Right _ -> pure ()
         copied <- doesFileExist "/tmp/burogu-test/dataoth-out/notes.txt"
         assertBool "not copied as static" (not copied)
+
+footerItemsTest :: TestTree
+footerItemsTest =
+    testCase "footer items link straight out for external redirectAs" $ do
+        let pages =
+                [ ("github", mkPageHidden (Just "GitHub") 10 (Just "https://github.com/me") PlFooter)
+                , ("about", mkPage (Just "About") 20 Nothing)
+                , ("secret", mkPageHidden (Just "Secret") 5 Nothing PlNone)
+                ]
+        case classifyPages pages of
+            Left _ -> assertBool "expected success" False
+            Right sp -> do
+                assertEqual "footer" [("https://github.com/me", "GitHub")] (map (\(l, h) -> (h, l)) (footerItems sp))
+                assertEqual "not in nav" [("/about/", "About")] (map (\(l, h) -> (h, l)) (navItems sp))
+
+footerLinksRendered :: TestTree
+footerLinksRendered =
+    testCase "footer links render above the copyright with a separator" $ do
+        let page = renderHtml (renderIndex testConfig [] [("GitHub", "https://github.com/me"), ("About", "/about/")] Nothing [])
+        assertBool "footer links" ("footer-links" `textIn` page)
+        assertBool "separator" ("GitHub</a> · <a href=\"/about/\">About</a>" `textIn` page)
+        assertBool "above copyright" ("footer-links" `T.isInfixOf` page)
+
+footerSeparatorConfig :: TestTree
+footerSeparatorConfig =
+    testCase "footer separator comes from config and may be empty" $ do
+        let page = renderHtml (renderIndex testConfig{siteFooterSeparator = "|"} [] [("A", "/a/"), ("B", "/b/")] Nothing [])
+        assertBool "custom separator" ("A</a>|<a href=\"/b/\">B" `textIn` page)
+        let page2 = renderHtml (renderIndex testConfig{siteFooterSeparator = ""} [] [("A", "/a/"), ("B", "/b/")] Nothing [])
+        assertBool "empty separator" ("A</a><a href=\"/b/\">B" `textIn` page2)
+
+formatMigrationTest :: TestTree
+formatMigrationTest =
+    testCase "format migrates hiddenInNavbar to placement with a warning" $ do
+        case normalizeFrontmatter PageKind "/tmp/x/p.md" "title: X\nhiddenInNavbar: true\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _, warnings) -> do
+                assertEqual "mapped" "title: X\npriority: 100\nplacement: none\n" fm
+                assertEqual "warning" ["migrated hiddenInNavbar: true to placement: none"] warnings
+        case normalizeFrontmatter PageKind "/tmp/x/p.md" "title: X\nhiddenInNavbar: false\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _, _) -> assertEqual "mapped false" "title: X\npriority: 100\nplacement: nav\n" fm
+        assertBool "invalid enum" (isLeft (normalizeFrontmatter PageKind "/tmp/x/p.md" "title: X\nplacement: sidebar\n"))
