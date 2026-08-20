@@ -4,11 +4,14 @@ import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch, throwIO)
 import Css (FontFile (..), Fonts (..), renderCss)
+import Data.Bits (shiftR, xor, (.&.))
+import Data.Char (intToDigit, ord)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
+import Data.Word (Word64)
 import Feed (renderAtom)
 import Html qualified as H
 import Lucid qualified as L
@@ -83,15 +86,17 @@ buildWork paths config posts = do
                             let footer = footerItems sp
                             removePathForcibly (pOut paths)
                             createDirectoryIfMissing True (pOut paths)
-                            TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav footer (snd <$> spIndex sp) posts)))
-                            write404 paths config nav footer (sp404 sp)
-                            writePages paths config nav footer (spNormal sp)
-                            writeRedirects paths config footer (specialPages sp <> spRedirects sp)
-                            writeStyleSheet paths config
-                            mapM_ (writePost paths config nav footer posts) posts
-                            writeTagPages paths config nav footer (spTags sp) posts
-                            writeArchive paths config nav footer (spArchive sp) posts
-                            writeSearch paths config nav footer sp posts
+                            css <- renderStyleCss paths config
+                            let cssRef = cssHref css
+                            TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav footer cssRef (snd <$> spIndex sp) posts)))
+                            write404 paths config nav footer cssRef (sp404 sp)
+                            writePages paths config nav footer cssRef (spNormal sp)
+                            writeRedirects paths config footer cssRef (specialPages sp <> spRedirects sp)
+                            writeStyleSheet paths css
+                            mapM_ (writePost paths config nav footer cssRef posts) posts
+                            writeTagPages paths config nav footer cssRef (spTags sp) posts
+                            writeArchive paths config nav footer cssRef (spArchive sp) posts
+                            writeSearch paths config nav footer cssRef sp posts
                             writeRobots paths config
                             brFeed <- writeFeed paths config posts
                             brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
@@ -99,13 +104,13 @@ buildWork paths config posts = do
                             writeScriptOutputs paths scriptFiles
                             pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap, brScriptFiles = length scriptFiles}
 
-write404 :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Maybe (Text, CustomPage) -> IO ()
-write404 paths config nav footer mEntry =
+write404 :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Maybe (Text, CustomPage) -> IO ()
+write404 paths config nav footer cssRef mEntry =
     case mEntry of
         Just (_, page) ->
-            TIO.writeFile (pOut paths </> "404.html") (TL.toStrict (L.renderText (H.renderCustomPage config nav footer pageMeta page)))
+            TIO.writeFile (pOut paths </> "404.html") (TL.toStrict (L.renderText (H.renderCustomPage config nav footer cssRef pageMeta page)))
         Nothing ->
-            TIO.writeFile (pOut paths </> "404.html") (TL.toStrict (L.renderText (H.render404 config nav footer)))
+            TIO.writeFile (pOut paths </> "404.html") (TL.toStrict (L.renderText (H.render404 config nav footer cssRef)))
   where
     pageMeta :: H.PageMeta
     pageMeta =
@@ -117,15 +122,15 @@ write404 paths config nav footer mEntry =
             , H.pmHasMath = maybe False cpHasMath (snd <$> mEntry)
             }
 
-writePages :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> [(Text, CustomPage)] -> IO ()
-writePages paths config nav footer pages =
+writePages :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [(Text, CustomPage)] -> IO ()
+writePages paths config nav footer cssRef pages =
     mapM_ writeOne pages
   where
     writeOne :: (Text, CustomPage) -> IO ()
     writeOne (slug, page) = do
         let dir = pOut paths </> T.unpack slug
         createDirectoryIfMissing True dir
-        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderCustomPage config nav footer pageMeta page)))
+        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderCustomPage config nav footer cssRef pageMeta page)))
       where
         pageMeta :: H.PageMeta
         pageMeta =
@@ -140,8 +145,8 @@ writePages paths config nav footer pages =
 {- | Write redirect pages for special pages whose file slug differs
 from their canonical URL.
 -}
-writeRedirects :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, CustomPage)] -> IO ()
-writeRedirects paths config footer specials =
+writeRedirects :: Paths -> SiteConfig -> [(Text, Text)] -> Text -> [(Text, CustomPage)] -> IO ()
+writeRedirects paths config footer cssRef specials =
     mapM_ writeOne [(slug, page) | (slug, page) <- specials, "/" <> slug <> "/" /= canonical page]
   where
     canonical :: CustomPage -> Text
@@ -150,20 +155,44 @@ writeRedirects paths config footer specials =
     writeOne (slug, page) = do
         let dir = pOut paths </> T.unpack slug
         createDirectoryIfMissing True dir
-        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderRedirect config (canonical page))))
+        TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderRedirect config cssRef (canonical page))))
 
-writeStyleSheet :: Paths -> SiteConfig -> IO ()
-writeStyleSheet paths config = do
+{- | Render the stylesheet for the site (preset + font overrides +
+extraCss) and copy embedded fonts.
+-}
+renderStyleCss :: Paths -> SiteConfig -> IO Text
+renderStyleCss paths config = do
     let theme = siteTheme config
         preset = case presetByName (themePreset theme) of
             Just p -> p
             Nothing -> error ("unknown theme preset: " <> T.unpack (themePreset theme))
     extra <- mapM (readExtraCss . T.unpack) (themeExtraCss theme)
     copyFonts paths (fromMaybe [] (fontsFiles (themeFonts theme)))
-    TIO.writeFile (pOut paths </> "style.css") (renderCss preset (themeFonts theme) extra)
+    pure (renderCss preset (themeFonts theme) extra)
   where
     readExtraCss :: FilePath -> IO Text
     readExtraCss file = TIO.readFile (pSrc paths </> file)
+
+writeStyleSheet :: Paths -> Text -> IO ()
+writeStyleSheet paths css =
+    TIO.writeFile (pOut paths </> "style.css") css
+
+{- | The cache-busting stylesheet reference: a content hash in the
+query string so browsers re-fetch after every change.
+-}
+cssHref :: Text -> Text
+cssHref css = "/style.css?v=" <> fnv1a css
+
+{- | FNV-1a 64-bit hash, rendered as 8 hex digits. Good enough for
+cache busting.
+-}
+fnv1a :: Text -> Text
+fnv1a = T.pack . take 8 . hex . T.foldl' step offset
+  where
+    offset = 0xcbf29ce484222325 :: Word64
+    step h c = (h `xor` fromIntegral (ord c)) * 0x100000001b3
+    hex 0 = ""
+    hex n = hex (n `shiftR` 4) <> [intToDigit (fromIntegral (n .&. 0xf))]
 
 {- | Copy embedded font files into site/fonts/. The @font-face rules
 reference them as /fonts/<basename> (site-root absolute).
@@ -202,19 +231,19 @@ validateExtraJs paths config =
             then pure ()
             else ioError (userError ("extra JS file not found in " <> pSrc paths <> ": " <> T.unpack file))
 
-writePost :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> [Post] -> Post -> IO ()
-writePost paths config nav footer allPosts post = do
+writePost :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [Post] -> Post -> IO ()
+writePost paths config nav footer cssRef allPosts post = do
     let dir = pOut paths </> postsDirName </> T.unpack (postSlug post)
     createDirectoryIfMissing True dir
-    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config nav footer (neighborsOf post allPosts) post)))
+    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderPost config nav footer cssRef (neighborsOf post allPosts) post)))
 
 neighborsOf :: Post -> [Post] -> (Maybe Post, Maybe Post)
 neighborsOf post posts = case break ((== postSlug post) . postSlug) posts of
     (before, _ : after) -> (listToMaybe (reverse before), listToMaybe after)
     _ -> (Nothing, Nothing)
 
-writeTagPages :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Maybe (Text, CustomPage) -> [Post] -> IO ()
-writeTagPages paths config nav footer mTagsPage posts =
+writeTagPages :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Maybe (Text, CustomPage) -> [Post] -> IO ()
+writeTagPages paths config nav footer cssRef mTagsPage posts =
     case mTagsPage of
         Nothing -> pure ()
         Just (_, page) -> do
@@ -222,32 +251,32 @@ writeTagPages paths config nav footer mTagsPage posts =
                 groups = H.groupByTag posts
                 tagsDir = pOut paths </> T.unpack (T.dropWhile (== '/') (T.dropWhileEnd (== '/') H.tagUrlPrefix))
             createDirectoryIfMissing True tagsDir
-            TIO.writeFile (tagsDir </> "index.html") (TL.toStrict (L.renderText (H.renderTagIndex config nav footer label groups)))
-            mapM_ (writeTagPage config nav footer tagsDir) groups
+            TIO.writeFile (tagsDir </> "index.html") (TL.toStrict (L.renderText (H.renderTagIndex config nav footer cssRef label groups)))
+            mapM_ (writeTagPage config nav footer cssRef tagsDir) groups
 
-writeTagPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> FilePath -> (Text, [Post]) -> IO ()
-writeTagPage config nav footer tagsDir (tag, posts) = do
+writeTagPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> FilePath -> (Text, [Post]) -> IO ()
+writeTagPage config nav footer cssRef tagsDir (tag, posts) = do
     let dir = tagsDir </> T.unpack tag
     createDirectoryIfMissing True dir
-    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderTagArchive config nav footer tag posts)))
+    TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderTagArchive config nav footer cssRef tag posts)))
 
-writeArchive :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Maybe (Text, CustomPage) -> [Post] -> IO ()
-writeArchive paths config nav footer mArchivePage posts =
+writeArchive :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Maybe (Text, CustomPage) -> [Post] -> IO ()
+writeArchive paths config nav footer cssRef mArchivePage posts =
     case mArchivePage of
         Nothing -> pure ()
         Just (_, page) -> do
             let dir = pOut paths </> "archive"
             createDirectoryIfMissing True dir
-            TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderArchive config nav footer (fromMaybe defaultArchiveTitle (cpTitle page)) posts)))
+            TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (H.renderArchive config nav footer cssRef (fromMaybe defaultArchiveTitle (cpTitle page)) posts)))
 
-writeSearch :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> SitePages -> [Post] -> IO ()
-writeSearch paths config nav footer sp posts =
+writeSearch :: Paths -> SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> SitePages -> [Post] -> IO ()
+writeSearch paths config nav footer cssRef sp posts =
     case spSearch sp of
         Nothing -> pure ()
         Just (_, page) -> do
             let dir = pOut paths </> "search"
             createDirectoryIfMissing True dir
-            TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (renderSearch config nav footer (fromMaybe defaultSearchTitle (cpTitle page)))))
+            TIO.writeFile (dir </> "index.html") (TL.toStrict (L.renderText (renderSearch config nav footer cssRef (fromMaybe defaultSearchTitle (cpTitle page)))))
             TIO.writeFile (pOut paths </> "search.json") (renderSearchIndex posts (spNormal sp))
 
 writeFeed :: Paths -> SiteConfig -> [Post] -> IO Bool

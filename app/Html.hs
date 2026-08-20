@@ -26,8 +26,8 @@ data PageMeta = PageMeta
     , pmHasMath :: Bool
     }
 
-layout :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> PageMeta -> L.Html () -> L.Html ()
-layout cfg navPages footerLinks meta body =
+layout :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> PageMeta -> L.Html () -> L.Html ()
+layout cfg navPages footerLinks cssRef meta body =
     L.doctype_
         *> L.html_
             [L.lang_ (siteLang cfg)]
@@ -42,7 +42,7 @@ layout cfg navPages footerLinks meta body =
                     renderExtraJs cfg
                     L.script_ (themeScript :: Text)
                     L.script_ (codeScript :: Text)
-                    L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
+                    L.link_ [L.rel_ "stylesheet", L.href_ cssRef]
                 L.body_ $ do
                     L.header_ [L.class_ "site-header"] $ L.nav_ $ do
                         L.a_ [L.class_ "site-name", L.href_ "/"] (L.toHtml (siteName cfg))
@@ -110,11 +110,11 @@ codeScript = decodeUtf8 $(embedFile "js/code.js")
 renderNavPage :: (Text, Text) -> L.Html ()
 renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
 
-renderCustomPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> PageMeta -> CustomPage -> L.Html ()
-renderCustomPage cfg navPages footerLinks meta page = layout cfg navPages footerLinks meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
+renderCustomPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> PageMeta -> CustomPage -> L.Html ()
+renderCustomPage cfg navPages footerLinks cssRef meta page = layout cfg navPages footerLinks cssRef meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))
 
-render404 :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> L.Html ()
-render404 cfg navPages footerLinks = layout cfg navPages footerLinks pageMeta $ L.div_ [L.class_ "not-found"] $ do
+render404 :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> L.Html ()
+render404 cfg navPages footerLinks cssRef = layout cfg navPages footerLinks cssRef pageMeta $ L.div_ [L.class_ "not-found"] $ do
     L.h1_ (L.toHtml ("404" :: Text))
     L.p_ (L.toHtml (t lang "notFoundTitle"))
     L.p_ (L.toHtml (t lang "notFoundBody"))
@@ -127,8 +127,8 @@ render404 cfg navPages footerLinks = layout cfg navPages footerLinks pageMeta $ 
 {- | The archive page: all posts grouped into year sections, newest
 first. Posts must already be sorted by date descending.
 -}
-renderArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
-renderArchive cfg navPages footerLinks title posts = layout cfg navPages footerLinks pageMeta (mapM_ yearSection (groupByYear posts))
+renderArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Text -> [Post] -> L.Html ()
+renderArchive cfg navPages footerLinks cssRef title posts = layout cfg navPages footerLinks cssRef pageMeta (mapM_ yearSection (groupByYear posts))
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = title, pmOgType = "website", pmOgPath = "/archive/", pmOgDescription = Nothing, pmHasMath = False}
@@ -146,8 +146,8 @@ renderArchive cfg navPages footerLinks title posts = layout cfg navPages footerL
 {- | A standalone redirect page (meta refresh + canonical link) for a
 page whose canonical URL differs from its own slug URL.
 -}
-renderRedirect :: SiteConfig -> Text -> L.Html ()
-renderRedirect cfg target =
+renderRedirect :: SiteConfig -> Text -> Text -> L.Html ()
+renderRedirect cfg cssRef target =
     L.doctype_
         *> L.html_
             [L.lang_ "en"]
@@ -156,7 +156,7 @@ renderRedirect cfg target =
                     L.meta_ [L.charset_ "utf-8"]
                     L.meta_ [LB.makeAttribute "http-equiv" "refresh", L.content_ ("0; url=" <> target)]
                     L.link_ [L.rel_ "canonical", L.href_ target]
-                    L.link_ [L.rel_ "stylesheet", L.href_ "/style.css"]
+                    L.link_ [L.rel_ "stylesheet", L.href_ cssRef]
                     L.title_ (L.toHtml (tWith lang "redirectingTo" [target]))
                 L.body_ $ do
                     L.p_ $ L.toHtml (tWith lang "redirectingTo" [target])
@@ -165,8 +165,8 @@ renderRedirect cfg target =
   where
     lang = fromSiteLang (siteLang cfg)
 
-renderIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Maybe CustomPage -> [Post] -> L.Html ()
-renderIndex cfg navPages footerLinks mIndexPage posts = layout cfg navPages footerLinks pageMeta $ do
+renderIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Maybe CustomPage -> [Post] -> L.Html ()
+renderIndex cfg navPages footerLinks cssRef mIndexPage posts = layout cfg navPages footerLinks cssRef pageMeta $ do
     case mIndexPage of
         Nothing -> L.ul_ [L.class_ "post-list"] (mapM_ item posts)
         Just page -> do
@@ -185,8 +185,8 @@ renderIndex cfg navPages footerLinks mIndexPage posts = layout cfg navPages foot
             renderTags (postTags post)
             maybe (pure ()) renderDescription (postDescription post)
 
-renderPost :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
-renderPost cfg navPages footerLinks neighbors post = layout cfg navPages footerLinks pageMeta $ L.article_ $ do
+renderPost :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
+renderPost cfg navPages footerLinks cssRef neighbors post = layout cfg navPages footerLinks cssRef pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml (postTitle post))
     L.p_ [L.class_ "post-meta"] $ do
         L.time_ (L.toHtml (postDate post))
@@ -233,8 +233,8 @@ readingMinutes post =
         wordCount = length (T.words text)
      in max 1 (max (chars `div` 400) (wordCount `div` 200))
 
-renderTagIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [(Text, [Post])] -> L.Html ()
-renderTagIndex cfg navPages footerLinks label groups = layout cfg navPages footerLinks pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
+renderTagIndex :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Text -> [(Text, [Post])] -> L.Html ()
+renderTagIndex cfg navPages footerLinks cssRef label groups = layout cfg navPages footerLinks cssRef pageMeta $ L.ul_ [L.class_ "tag-list"] (mapM_ item groups)
   where
     pageMeta :: PageMeta
     pageMeta = PageMeta{pmTitle = label, pmOgType = "website", pmOgPath = tagUrlPrefix, pmOgDescription = Nothing, pmHasMath = False}
@@ -244,8 +244,8 @@ renderTagIndex cfg navPages footerLinks label groups = layout cfg navPages foote
             L.a_ [L.class_ "tag-name", L.href_ (tagUrl tag)] (L.toHtml tag)
             L.span_ [L.class_ "tag-count"] (L.toHtml ("(" <> T.pack (show (length posts)) <> ")"))
 
-renderTagArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> [Post] -> L.Html ()
-renderTagArchive cfg navPages footerLinks tag posts = layout cfg navPages footerLinks pageMeta $ L.article_ $ do
+renderTagArchive :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> Text -> [Post] -> L.Html ()
+renderTagArchive cfg navPages footerLinks cssRef tag posts = layout cfg navPages footerLinks cssRef pageMeta $ L.article_ $ do
     L.h1_ (L.toHtml tag)
     L.ul_ [L.class_ "post-list"] (mapM_ item posts)
   where

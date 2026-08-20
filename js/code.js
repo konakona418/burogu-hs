@@ -23,6 +23,10 @@ document.addEventListener("DOMContentLoaded", function () {
  var blocks = document.querySelectorAll("pre > code.sourceCode");
  blocks.forEach(function (code) {
   var pre = code.parentElement;
+  var wrapper = document.createElement("div");
+  wrapper.className = "code-block";
+  pre.parentNode.insertBefore(wrapper, pre);
+  wrapper.appendChild(pre);
   var lang = null;
   code.className.split(/\s+/).forEach(function (cls) {
    if (cls !== "sourceCode" && lang === null) { lang = cls; }
@@ -31,7 +35,7 @@ document.addEventListener("DOMContentLoaded", function () {
    var label = document.createElement("span");
    label.className = "code-lang";
    label.textContent = langNames[lang] || lang;
-   pre.appendChild(label);
+   wrapper.appendChild(label);
   }
   var button = document.createElement("button");
   button.className = "copy-button";
@@ -52,6 +56,6 @@ document.addEventListener("DOMContentLoaded", function () {
     fail();
    }
   });
-  pre.appendChild(button);
+  wrapper.appendChild(button);
  });
 });

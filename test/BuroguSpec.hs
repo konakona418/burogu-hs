@@ -201,6 +201,7 @@ tests =
             , indexPageRenderedOnHome
             , indexPageExcludedFromNav
             , darkThemeAttributeSelectors
+            , cssFingerprint
             , themeToggleScriptInjected
             , i18nCompleteness
             , i18nFromSiteLang
@@ -330,7 +331,7 @@ renderPostTocShown :: TestTree
 renderPostTocShown =
     testCase "a toc-enabled post renders the heading list" $ do
         let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
         assertBool "toc nav" ("<nav class=\"toc\">" `textIn` page)
         assertBool "toc link" ("href=\"#second\">Second</a>" `textIn` page)
 
@@ -338,16 +339,16 @@ renderPostTocHidden :: TestTree
 renderPostTocHidden =
     testCase "a post without toc stays clean" $ do
         let post = (postWithTags []){postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
         assertBool "no toc" ("class=\"toc\"" `notTextIn` page)
 
 readingTimeShown :: TestTree
 readingTimeShown =
     testCase "the reading time is shown in the post meta" $ do
         let post = (postWithTags []){postText = T.replicate 900 "字"}
-            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
         assertBool "zh label" ("约 2 分钟" `textIn` page)
-        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] (Nothing, Nothing) post)
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] "/style.css" (Nothing, Nothing) post)
         assertBool "en label" ("min read" `textIn` enPage)
 
 postNavRendered :: TestTree
@@ -355,21 +356,21 @@ postNavRendered =
     testCase "prev and next posts are linked at the bottom" $ do
         let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
             newer = (postWithTags []){postSlug = "newer", postTitle = "Newer", postDate = "2026-03-01"}
-            page = renderHtml (renderPost testConfig [] [] (Just newer, Just older) (postWithTags []))
+            page = renderHtml (renderPost testConfig [] [] "/style.css" (Just newer, Just older) (postWithTags []))
         assertBool "prev label" ("上一篇" `textIn` page)
         assertBool "next label" ("下一篇" `textIn` page)
         assertBool "prev link" ("href=\"/posts/newer/\">Newer</a>" `textIn` page)
         assertBool "next link" ("href=\"/posts/older/\">Older</a>" `textIn` page)
         assertBool "no arrows" ("←" `notTextIn` page && "→" `notTextIn` page)
-        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] (Just newer, Just older) (postWithTags []))
+        let enPage = renderHtml (renderPost testConfig{siteLang = "en"} [] [] "/style.css" (Just newer, Just older) (postWithTags []))
         assertBool "en labels" ("Previous" `textIn` enPage && "Next" `textIn` enPage)
 
 postNavSingleSide :: TestTree
 postNavSingleSide =
     testCase "one-sided nav renders without a dangling separator" $ do
         let older = (postWithTags []){postSlug = "older", postTitle = "Older", postDate = "2026-01-01"}
-        assertEqual "neither side" False ("post-nav" `textIn` renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags [])))
-        let onlyNext = renderHtml (renderPost testConfig [] [] (Nothing, Just older) (postWithTags []))
+        assertEqual "neither side" False ("post-nav" `textIn` renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) (postWithTags [])))
+        let onlyNext = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Just older) (postWithTags []))
         assertBool "next only" ("post-nav-next" `textIn` onlyNext)
         assertBool "no prev" ("post-nav-prev" `notTextIn` onlyNext)
         assertBool "pushed right" ("margin-left:auto" `notTextIn` onlyNext)
@@ -390,7 +391,7 @@ tocLevelClasses :: TestTree
 tocLevelClasses =
     testCase "toc entries carry level classes" $ do
         let post = (postWithTags []){postShowToc = True, postToc = [TocEntry 2 "Second" "second"]}
-            page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
         assertBool "level class" ("toc-level-2" `textIn` page)
 
 contentElementStyles :: TestTree
@@ -405,7 +406,7 @@ contentElementStyles =
 searchNoResults :: TestTree
 searchNoResults =
     testCase "the search page ships a no-results hint" $ do
-        let page = renderHtml (renderSearch testConfig [] [] "搜索")
+        let page = renderHtml (renderSearch testConfig [] [] "/style.css" "搜索")
         assertBool "hint element" ("search-no-results" `textIn` page)
         assertBool "hidden initially" ("hidden" `textIn` page)
         assertBool "script toggles it" ("showResults" `textIn` page)
@@ -413,7 +414,7 @@ searchNoResults =
 codeScriptInjected :: TestTree
 codeScriptInjected =
     testCase "every page ships the code-block script" $ do
-        let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags []))
+        let page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) (postWithTags []))
         assertBool "copy logic" ("copy-button" `textIn` page)
         assertBool "lang extraction" ("langNames" `textIn` page)
         assertBool "clipboard" ("clipboard" `textIn` page)
@@ -459,12 +460,12 @@ i18nPlaceholders =
 i18nPageOutput :: TestTree
 i18nPageOutput =
     testCase "pages localize per siteLang" $ do
-        let zhPage = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) ((postWithTags []){postText = T.replicate 900 "字"}))
+        let zhPage = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) ((postWithTags []){postText = T.replicate 900 "字"}))
         assertBool "zh reading time" ("约 2 分钟" `textIn` zhPage)
-        let enPage = renderHtml (renderIndex testConfig{siteLang = "en"} [] [] (Just (mkPage (Just "Home") 0 Nothing)) [])
+        let enPage = renderHtml (renderIndex testConfig{siteLang = "en"} [] [] "/style.css" (Just (mkPage (Just "Home") 0 Nothing)) [])
         assertBool "en section title" ("Posts" `textIn` enPage)
-        assertBool "zh section title" ("文章" `textIn` renderHtml (renderIndex testConfig [] [] (Just (mkPage (Just "Home") 0 Nothing)) []))
-        let zh404 = renderHtml (render404 testConfig [] [])
+        assertBool "zh section title" ("文章" `textIn` renderHtml (renderIndex testConfig [] [] "/style.css" (Just (mkPage (Just "Home") 0 Nothing)) []))
+        let zh404 = renderHtml (render404 testConfig [] [] "/style.css")
         assertBool "zh 404" ("页面不存在" `textIn` zh404)
 
 indexSpecialPageClassified :: TestTree
@@ -478,7 +479,7 @@ indexSpecialPageClassified =
 indexPageRenderedOnHome :: TestTree
 indexPageRenderedOnHome =
     testCase "the index page renders above the post list" $ do
-        let page = renderHtml (renderIndex testConfig [] [] (Just (mkPage (Just "Home") 0 Nothing)) [postWithTags []])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" (Just (mkPage (Just "Home") 0 Nothing)) [postWithTags []])
         assertBool "index body" ("<div class=\"post-body index-body\">" `textIn` page)
         assertBool "section title" ("index-title" `textIn` page)
         assertBool "post list" ("post-list" `textIn` page)
@@ -502,10 +503,18 @@ darkThemeAttributeSelectors =
         assertBool "structural lists unbulleted" (".post-list" `textIn` css && "list-style-type : none" `textIn` css)
         assertBool "content lists default" ("blockquote" `textIn` css)
 
+cssFingerprint :: TestTree
+cssFingerprint =
+    testCase "pages reference the stylesheet with a content hash" $ do
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css?v=deadbeef" Nothing [])
+        assertBool "hashed href" ("href=\"/style.css?v=deadbeef\"" `textIn` page)
+        let redirect = renderHtml (renderRedirect testConfig "/style.css?v=deadbeef" "/tags/")
+        assertBool "redirect page hashed" ("href=\"/style.css?v=deadbeef\"" `textIn` redirect)
+
 themeToggleScriptInjected :: TestTree
 themeToggleScriptInjected =
     testCase "every page carries the theme toggle script" $ do
-        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [])
         assertBool "script" ("burogu-theme" `textIn` page)
         assertBool "footer target" ("site-footer" `textIn` page)
         assertBool "button rendered" ("theme-toggle" `textIn` page)
@@ -735,7 +744,7 @@ mathjaxInlineMath =
             assertBool "math span" ("<span class=\"math inline\">\\(x^2\\)</span>" `textIn` postBodyHtml post)
             assertBool "no script in body fragment" ("<script" `notTextIn` postBodyHtml post)
             assertBool "post marked as having math" (postHasMath post)
-            let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            let page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
             assertBool "script injected in page" ("<script" `textIn` page)
             assertBool "mathjax URL" ("mathjax" `textIn` page)
 
@@ -746,7 +755,7 @@ mathjaxNoMathNoScript =
         assertRight result $ \post -> do
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             assertBool "not marked as having math" (not (postHasMath post))
-            let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) post)
+            let page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) post)
             assertBool "no math script in page" ("katex.min.js" `notTextIn` page)
             assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
@@ -758,7 +767,7 @@ plainMathNoScript =
             assertBool "math span present" ("math inline" `textIn` postBodyHtml post)
             assertBool "no script in body" ("<script" `notTextIn` postBodyHtml post)
             let noMathConfig = testConfig{siteTheme = (siteTheme testConfig){themeMath = "none"}}
-                page = renderHtml (renderPost noMathConfig [] [] (Nothing, Nothing) post)
+                page = renderHtml (renderPost noMathConfig [] [] "/style.css" (Nothing, Nothing) post)
             assertBool "no katex in page" ("katex.min.js" `notTextIn` page)
             assertBool "no mathjax in page" ("mathjax" `notTextIn` page)
 
@@ -773,13 +782,13 @@ mathMethodMapping =
 tagsLabelCustomized :: TestTree
 tagsLabelCustomized =
     testCase "tag index title comes from the tags page title" $ do
-        let page = renderHtml (renderTagIndex testConfig [] [] "标签" [("essay", [postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] [] "/style.css" "标签" [("essay", [postWithTags ["essay"]])])
         assertBool "index title" ("<title>标签</title>" `textIn` page)
 
 tagArchiveTitleIsTagName :: TestTree
 tagArchiveTitleIsTagName =
     testCase "tag archive title is the bare tag name" $ do
-        let page = renderHtml (renderTagArchive testConfig [] [] "essay" [postWithTags ["essay"]])
+        let page = renderHtml (renderTagArchive testConfig [] [] "/style.css" "essay" [postWithTags ["essay"]])
         assertBool "title" ("<title>essay</title>" `textIn` page)
         assertBool "no prefix" ("Tag:" `notTextIn` page)
 
@@ -866,7 +875,7 @@ searchInputFocusStyled =
 viewportFitCover :: TestTree
 viewportFitCover =
     testCase "viewport meta opts into full-screen safe areas" $ do
-        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [])
         assertBool "viewport-fit=cover" ("viewport-fit=cover" `textIn` page)
 
 cssExtraCssAppended :: TestTree
@@ -997,19 +1006,19 @@ fontsFromJson =
 siteNameClass :: TestTree
 siteNameClass =
     testCase "site name link carries the site-name class" $ do
-        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [])
         assertBool "site-name" ("class=\"site-name\"" `textIn` page)
 
 tagSeparatorSpan :: TestTree
 tagSeparatorSpan =
     testCase "tag separators are styled spans" $ do
-        let page = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags ["essay", "life"]))
+        let page = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) (postWithTags ["essay", "life"]))
         assertBool "separator span" ("<span class=\"post-tag-sep\"> · </span>" `textIn` page)
 
 tagCountHook :: TestTree
 tagCountHook =
     testCase "tag items expose the post count as a CSS variable hook" $ do
-        let page = renderHtml (renderTagIndex testConfig [] [] "Tags" [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
+        let page = renderHtml (renderTagIndex testConfig [] [] "/style.css" "Tags" [("essay", [postWithTags ["essay"], postWithTags ["essay"]])])
         assertBool "hook present" ("style=\"--tag-count: 2\"" `textIn` page)
 
 cliDefaults :: TestTree
@@ -1075,7 +1084,7 @@ robotsContent =
 notFoundPage :: TestTree
 notFoundPage =
     testCase "404 page renders with a home link" $ do
-        let page = renderHtml (render404 testConfig [] [])
+        let page = renderHtml (render404 testConfig [] [] "/style.css")
         assertBool "title" ("<title>404</title>" `textIn` page)
         assertBool "heading" ("<h1>404</h1>" `textIn` page)
         assertBool "home link" ("href=\"/\"" `textIn` page)
@@ -1090,9 +1099,9 @@ extraJsInjected :: TestTree
 extraJsInjected =
     testCase "extra JS files are injected as deferred scripts on every page" $ do
         let jsConfig = testConfig{siteTheme = (siteTheme testConfig){themeExtraJs = ["theme.js"]}}
-        let page = renderHtml (renderIndex jsConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex jsConfig [] [] "/style.css" Nothing [])
         assertBool "script tag" ("<script defer src=\"/theme.js\"" `textIn` page)
-        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] [] Nothing []))
+        assertBool "no script without extraJs" ("theme.js" `notTextIn` renderHtml (renderIndex testConfig [] [] "/style.css" Nothing []))
 
 serverParsePath :: TestTree
 serverParsePath =
@@ -1153,31 +1162,31 @@ customPageHasMath =
 aboutNavShown :: TestTree
 aboutNavShown =
     testCase "about link appears in the nav when present" $ do
-        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [("About Me", "/about/")] [] "/style.css" Nothing [])
         assertBool "nav link" ("href=\"/about/\">About Me" `textIn` page)
 
 aboutNavHidden :: TestTree
 aboutNavHidden =
     testCase "no about link without an about page" $ do
-        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [])
         assertBool "no link" ("/about/" `notTextIn` page)
 
 copyrightCustom :: TestTree
 copyrightCustom =
     testCase "footer uses the configurable copyright" $ do
-        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteCopyright = "自定义版权"} [] [] "/style.css" Nothing [])
         assertBool "custom copyright" ("自定义版权" `textIn` page)
 
 footerCreditShown :: TestTree
 footerCreditShown =
     testCase "footer shows the configured generator credit on the same line" $ do
-        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteGeneratedBy = Just "Generated with Burogu"} [] [] "/style.css" Nothing [])
         assertBool "joined line" ("© moe li · Generated with Burogu" `textIn` page)
 
 footerCreditHidden :: TestTree
 footerCreditHidden =
     testCase "footer omits the generator credit when unset" $ do
-        let page = renderHtml (renderIndex testConfig [] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [])
         assertBool "no credit text" ("site-credit" `notTextIn` page)
 
 loadPagesFromDir :: TestTree
@@ -1213,7 +1222,7 @@ loadPagesErrorAggregation =
 navMultiplePages :: TestTree
 navMultiplePages =
     testCase "nav renders multiple pages in order" $ do
-        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] [] Nothing [])
+        let page = renderHtml (renderIndex testConfig [("About", "/about/"), ("Projects", "/projects/")] [] "/style.css" Nothing [])
         assertBool "about link" ("href=\"/about/\">About" `textIn` page)
         assertBool "projects link" ("href=\"/projects/\">Projects" `textIn` page)
         let aboutPos = findSubstring "href=\"/about/\"" page
@@ -1442,7 +1451,7 @@ archiveYearGroups =
                 , (postWithTags []){postDate = "2026-01-01", postTitle = "Mid"}
                 , (postWithTags []){postDate = "2025-12-31", postTitle = "Old"}
                 ]
-        let page = renderHtml (renderArchive testConfig [] [] "Archive" posts)
+        let page = renderHtml (renderArchive testConfig [] [] "/style.css" "Archive" posts)
         assertBool "2026 section" ("<h2 class=\"archive-year\">2026</h2>" `textIn` page)
         assertBool "2025 section" ("<h2 class=\"archive-year\">2025</h2>" `textIn` page)
         assertBool "title" ("<title>Archive</title>" `textIn` page)
@@ -1454,7 +1463,7 @@ archiveYearGroups =
 redirectPageMetaRefresh :: TestTree
 redirectPageMetaRefresh =
     testCase "redirect pages carry a meta refresh and canonical link" $ do
-        let page = renderHtml (renderRedirect testConfig "/tags/")
+        let page = renderHtml (renderRedirect testConfig "/style.css" "/tags/")
         assertBool "meta refresh" ("http-equiv=\"refresh\" content=\"0; url=/tags/\"" `textIn` page)
         assertBool "canonical" ("rel=\"canonical\" href=\"/tags/\"" `textIn` page)
         assertBool "stylesheet" ("rel=\"stylesheet\" href=\"/style.css\"" `textIn` page)
@@ -1505,7 +1514,7 @@ searchIndexExcludesSpecials =
 searchPageRendered :: TestTree
 searchPageRendered =
     testCase "search page renders input and results container" $ do
-        let page = renderHtml (renderSearch testConfig [] [] "Search")
+        let page = renderHtml (renderSearch testConfig [] [] "/style.css" "Search")
         assertBool "title" ("<title>Search</title>" `textIn` page)
         assertBool "input" ("class=\"search-input\"" `textIn` page)
         assertBool "results" ("id=\"search-results\"" `textIn` page)
@@ -1513,7 +1522,7 @@ searchPageRendered =
 searchPageScript :: TestTree
 searchPageScript =
     testCase "search page script fetches the index and honors the hook" $ do
-        let page = renderHtml (renderSearch testConfig [] [] "Search")
+        let page = renderHtml (renderSearch testConfig [] [] "/style.css" "Search")
         assertBool "fetch" ("/search.json" `textIn` page)
         assertBool "hook" ("window.buroguSearch" `textIn` page)
         assertBool "default search" ("index.forEach" `textIn` page)
@@ -1640,7 +1649,7 @@ escapedPost =
 ogMetaOnPost :: TestTree
 ogMetaOnPost =
     testCase "post pages carry article OG metadata" $ do
-        let html = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags ["essay"]))
+        let html = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) (postWithTags ["essay"]))
         assertBool "og:title" ("og:title\" content=\"test\"" `textIn` html)
         assertBool "og:type" ("og:type\" content=\"article\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/posts/test/\"" `textIn` html)
@@ -1648,21 +1657,21 @@ ogMetaOnPost =
 ogTypeWebsiteOnIndex :: TestTree
 ogTypeWebsiteOnIndex =
     testCase "index pages carry website OG metadata" $ do
-        let html = renderHtml (renderIndex testConfig [] [] Nothing [postWithTags ["essay"]])
+        let html = renderHtml (renderIndex testConfig [] [] "/style.css" Nothing [postWithTags ["essay"]])
         assertBool "og:type" ("og:type\" content=\"website\"" `textIn` html)
         assertBool "og:url" ("og:url\" content=\"https://lizi.moe/\"" `textIn` html)
 
 ogUrlAbsentWithoutBaseUrl :: TestTree
 ogUrlAbsentWithoutBaseUrl =
     testCase "og:url is omitted without baseUrl" $ do
-        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] [] Nothing [])
+        let html = renderHtml (renderIndex testConfig{siteBaseUrl = Nothing} [] [] "/style.css" Nothing [])
         assertBool "no og:url" ("og:url" `notTextIn` html)
         assertBool "og:title still present" ("og:title" `textIn` html)
 
 ogDescriptionFallsBack :: TestTree
 ogDescriptionFallsBack =
     testCase "og:description falls back to siteDescription" $ do
-        let html = renderHtml (renderPost testConfig [] [] (Nothing, Nothing) (postWithTags []))
+        let html = renderHtml (renderPost testConfig [] [] "/style.css" (Nothing, Nothing) (postWithTags []))
         assertBool "fallback description" ("og:description\" content=\"A test blog\"" `textIn` html)
 
 renderHtml :: L.Html () -> Text
@@ -2300,7 +2309,7 @@ footerItemsTest =
 footerLinksRendered :: TestTree
 footerLinksRendered =
     testCase "footer links render above the copyright with a separator" $ do
-        let page = renderHtml (renderIndex testConfig [] [("GitHub", "https://github.com/me"), ("About", "/about/")] Nothing [])
+        let page = renderHtml (renderIndex testConfig [] [("GitHub", "https://github.com/me"), ("About", "/about/")] "/style.css" Nothing [])
         assertBool "footer links" ("footer-links" `textIn` page)
         assertBool "separator" ("GitHub</a> · <a href=\"/about/\">About</a>" `textIn` page)
         assertBool "above copyright" ("footer-links" `T.isInfixOf` page)
@@ -2308,9 +2317,9 @@ footerLinksRendered =
 footerSeparatorConfig :: TestTree
 footerSeparatorConfig =
     testCase "footer separator comes from config and may be empty" $ do
-        let page = renderHtml (renderIndex testConfig{siteFooterSeparator = "|"} [] [("A", "/a/"), ("B", "/b/")] Nothing [])
+        let page = renderHtml (renderIndex testConfig{siteFooterSeparator = "|"} [] [("A", "/a/"), ("B", "/b/")] "/style.css" Nothing [])
         assertBool "custom separator" ("A</a>|<a href=\"/b/\">B" `textIn` page)
-        let page2 = renderHtml (renderIndex testConfig{siteFooterSeparator = ""} [] [("A", "/a/"), ("B", "/b/")] Nothing [])
+        let page2 = renderHtml (renderIndex testConfig{siteFooterSeparator = ""} [] [("A", "/a/"), ("B", "/b/")] "/style.css" Nothing [])
         assertBool "empty separator" ("A</a><a href=\"/b/\">B" `textIn` page2)
 
 formatMigrationTest :: TestTree

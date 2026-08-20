@@ -361,6 +361,8 @@ baseRules = do
         C.padding (C.px 32) (C.px 16) (C.px 12) (C.px 16)
         C.borderRadius (C.px 4) (C.px 4) (C.px 4) (C.px 4)
         C.overflowX C.scroll
+        C.margin (C.auto) (C.px 0) (C.px 0) (C.px 0)
+    (".code-block" :: C.Selector) C.? do
         "position" C.-: "relative"
     C.pre C.? C.code C.? do
         "background-color" C.-: "transparent"
