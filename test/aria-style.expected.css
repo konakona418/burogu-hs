@@ -171,6 +171,12 @@ h1
 {
   font-size   : calc(var(--font-size) * 1.65);
   line-height : calc(var(--line-height) * 1.45);
+  font-weight : 700;
+}
+
+h2
+{
+  font-weight : 700;
 }
 
 time
@@ -747,7 +753,7 @@ pre
 
 nav a
 {
-  padding : 4px 4px;
+  padding : 4px 0;
 }
 
 nav

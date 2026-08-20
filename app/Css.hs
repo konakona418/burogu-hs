@@ -214,7 +214,7 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
         "--space-page-top" C.-: "16px"
         "--space-page-side" C.-: "12px"
     C.pre C.? ("font-size" C.-: "14px")
-    C.nav C.? C.a C.? ("padding" C.-: "4px 4px")
+    C.nav C.? C.a C.? ("padding" C.-: "4px 0")
     C.nav C.? ("gap" C.-: "0 var(--space-nav-link)")
     (".site-name" :: C.Selector) C.? do
         "flex-basis" C.-: "100%"
@@ -325,6 +325,8 @@ baseRules = do
     C.h1 C.? do
         "font-size" C.-: "calc(var(--font-size) * 1.65)"
         "line-height" C.-: "calc(var(--line-height) * 1.45)"
+        "font-weight" C.-: "700"
+    C.h2 C.? ("font-weight" C.-: "700")
     C.time C.? ("color" C.-: "var(--color-muted)")
     (".tag-count" :: C.Selector) C.? ("color" C.-: "var(--color-muted)")
     (".site-footer" :: C.Selector) C.? do
