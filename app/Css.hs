@@ -317,6 +317,7 @@ baseRules = do
         "line-height" C.-: "var(--line-height)"
         "color" C.-: "var(--color-text)"
         "background-color" C.-: "var(--color-bg)"
+        "overflow-wrap" C.-: "anywhere"
     C.a C.? do
         "color" C.-: "var(--color-link)"
         C.textDecoration C.underline
