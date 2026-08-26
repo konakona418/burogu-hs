@@ -201,6 +201,7 @@ tests =
             , indexPageRenderedOnHome
             , indexPageExcludedFromNav
             , darkThemeAttributeSelectors
+            , glyphFontRules
             , cssFingerprint
             , themeToggleScriptInjected
             , i18nCompleteness
@@ -502,6 +503,20 @@ darkThemeAttributeSelectors =
         assertEqual "layout tokens not duplicated" 2 (length declarations)
         assertBool "structural lists unbulleted" (".post-list" `textIn` css && "list-style-type : none" `textIn` css)
         assertBool "content lists default" ("blockquote" `textIn` css)
+
+glyphFontRules :: TestTree
+glyphFontRules =
+    testCase "language glyph fonts follow the theme" $ do
+        let aria = renderCss ariaPreset emptyFonts []
+        assertBool "aria ja token" ("--font-ja" `textIn` aria)
+        assertBool "aria hant token" ("--font-hant" `textIn` aria)
+        assertBool "lang rule" (":lang(ja)" `textIn` aria)
+        assertBool "hant langs" (":lang(zh-Hant)" `textIn` aria && ":lang(zh-TW)" `textIn` aria)
+        let shaft = renderCss shaftPreset emptyFonts []
+        assertBool "shaft ja serif" ("Hiragino Mincho" `textIn` shaft)
+        assertBool "shaft hant serif" ("Songti TC" `textIn` shaft)
+        let overrides = renderCss ariaPreset Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsJa = Just ["My JP"], fontsHant = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Nothing} []
+        assertBool "ja override" ("My JP" `textIn` overrides)
 
 cssFingerprint :: TestTree
 cssFingerprint =
@@ -907,6 +922,8 @@ fontOverridesApplied =
                     Fonts
                         { fontsBody = Just ["My Font"]
                         , fontsDisplay = Nothing
+                        , fontsJa = Nothing
+                        , fontsHant = Nothing
                         , fontsCode = Nothing
                         , fontsSize = Just "18px"
                         , fontsLineHeight = Nothing
@@ -927,6 +944,8 @@ fontStackQuoting =
                     Fonts
                         { fontsBody = Nothing
                         , fontsDisplay = Just ["Noto Serif CJK SC", "SimSun", "serif"]
+                        , fontsJa = Nothing
+                        , fontsHant = Nothing
                         , fontsCode = Nothing
                         , fontsSize = Nothing
                         , fontsLineHeight = Nothing
@@ -945,6 +964,8 @@ fontFaceEmitted =
                         { fontsBody = Nothing
                         , fontsDisplay = Nothing
                         , fontsCode = Nothing
+                        , fontsJa = Nothing
+                        , fontsHant = Nothing
                         , fontsSize = Nothing
                         , fontsLineHeight = Nothing
                         , fontsFiles = Just [FontFile "fonts/myserif.woff2" "My Serif" "700" "italic"]
@@ -1550,7 +1571,7 @@ fontFileMissingKeepsOldOutput =
         createDirectoryIfMissing True "/tmp/burogu-test/font-src"
         createDirectoryIfMissing True "/tmp/burogu-test/font-out"
         writeFile "/tmp/burogu-test/font-out/marker.txt" "old"
-        let fonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Just [FontFile "fonts/nope.woff2" "Nope" "400" "normal"]}
+        let fonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsJa = Nothing, fontsHant = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Just [FontFile "fonts/nope.woff2" "Nope" "400" "normal"]}
             config = testConfig{siteTheme = (siteTheme testConfig){themeFonts = fonts}}
             paths = Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/font-src", pOut = "/tmp/burogu-test/font-out"}
         result <- try (build paths config []) :: IO (Either IOException BuildReport)

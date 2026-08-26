@@ -91,7 +91,7 @@ buildWork paths config posts = do
                             TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav footer cssRef (snd <$> spIndex sp) posts)))
                             write404 paths config nav footer cssRef (sp404 sp)
                             writePages paths config nav footer cssRef (spNormal sp)
-                            writeRedirects paths config footer cssRef (specialPages sp <> spRedirects sp)
+                            writeRedirects paths config cssRef (specialPages sp <> spRedirects sp)
                             writeStyleSheet paths css
                             mapM_ (writePost paths config nav footer cssRef posts) posts
                             writeTagPages paths config nav footer cssRef (spTags sp) posts
@@ -145,8 +145,8 @@ writePages paths config nav footer cssRef pages =
 {- | Write redirect pages for special pages whose file slug differs
 from their canonical URL.
 -}
-writeRedirects :: Paths -> SiteConfig -> [(Text, Text)] -> Text -> [(Text, CustomPage)] -> IO ()
-writeRedirects paths config footer cssRef specials =
+writeRedirects :: Paths -> SiteConfig -> Text -> [(Text, CustomPage)] -> IO ()
+writeRedirects paths config cssRef specials =
     mapM_ writeOne [(slug, page) | (slug, page) <- specials, "/" <> slug <> "/" /= canonical page]
   where
     canonical :: CustomPage -> Text

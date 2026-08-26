@@ -361,6 +361,19 @@ detected automatically per post. The meta line shows an estimated
 reading time, and the bottom of the page links the previous and next
 posts.
 
+posts.
+
+Text can be marked for a specific script language, so browsers pick
+region-correct glyphs (e.g. 骨 differs between zh and ja):
+
+    [日本語の骨]{lang=ja}                inline span
+    ::: {lang=zh-TW}
+    繁體段落
+    :::
+
+The fonts for `ja` and `zh-Hant`/`zh-TW` follow the theme (`--font-ja`,
+`--font-hant`, overridable via `theme.fonts.ja`/`theme.fonts.hant`).
+
 ### Pages
 
 Pages live in `src/_pages/*.md`; each becomes `/slug/` and is listed

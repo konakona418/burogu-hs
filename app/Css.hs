@@ -58,6 +58,8 @@ data Fonts = Fonts
     { fontsBody :: Maybe [Text]
     , fontsDisplay :: Maybe [Text]
     , fontsCode :: Maybe [Text]
+    , fontsJa :: Maybe [Text]
+    , fontsHant :: Maybe [Text]
     , fontsSize :: Maybe Text
     , fontsLineHeight :: Maybe Text
     , fontsFiles :: Maybe [FontFile]
@@ -71,7 +73,7 @@ data FontFile = FontFile
     }
 
 emptyFonts :: Fonts
-emptyFonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Nothing}
+emptyFonts = Fonts{fontsBody = Nothing, fontsDisplay = Nothing, fontsCode = Nothing, fontsJa = Nothing, fontsHant = Nothing, fontsSize = Nothing, fontsLineHeight = Nothing, fontsFiles = Nothing}
 
 instance FromJSON Fonts where
     parseJSON = withObject "fonts" $ \object ->
@@ -79,6 +81,8 @@ instance FromJSON Fonts where
             <$> object .:? "body"
             <*> object .:? "display"
             <*> object .:? "code"
+            <*> object .:? "ja"
+            <*> object .:? "hant"
             <*> object .:? "size"
             <*> object .:? "lineHeight"
             <*> object .:? "files"
@@ -163,6 +167,8 @@ fontOverrideTokens preset fonts =
         <> maybe [] (\v -> [("line-height", v)]) (fontsLineHeight fonts)
         <> maybe [] (\stack -> [("font-display", fontStack stack)]) (fontsDisplay fonts <|> presetDisplayFont preset)
         <> maybe [] (\stack -> [("font-code", fontStack stack)]) (fontsCode fonts <|> presetCodeFont preset)
+        <> maybe [] (\stack -> [("font-ja", fontStack stack)]) (fontsJa fonts)
+        <> maybe [] (\stack -> [("font-hant", fontStack stack)]) (fontsHant fonts)
 
 {- | Render a font stack: names with spaces are quoted, generic keywords
 (serif, sans-serif, ...) are not.
@@ -223,6 +229,7 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
         "margin-bottom" C.-: "4px"
     (".post-nav" :: C.Selector) C.? C.flexDirection CF.column
     (".post-nav-next" :: C.Selector) C.? ("margin-left" C.-: "0")
+    (".post-nav-next .post-nav-label" :: C.Selector) C.? ("text-align" C.-: "left")
 
 listSpacing :: C.Css
 listSpacing = do
@@ -277,6 +284,8 @@ baseTokens =
     , ("color-code-bg", "#f5f5f5")
     , ("color-mark", "#ffe58f")
     , ("font-family", "\"Helvetica Neue\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif")
+    , ("font-ja", "\"Hiragino Sans\", \"Yu Gothic\", \"Meiryo\", \"Noto Sans JP\", \"Noto Sans CJK JP\", sans-serif")
+    , ("font-hant", "\"PingFang TC\", \"Microsoft JhengHei\", \"Noto Sans TC\", \"Noto Sans CJK TC\", sans-serif")
     , ("font-size", "17px")
     , ("line-height", "28px")
     , ("content-width", "800px")
@@ -318,6 +327,11 @@ baseRules = do
         "color" C.-: "var(--color-text)"
         "background-color" C.-: "var(--color-bg)"
         "overflow-wrap" C.-: "anywhere"
+    (":lang(ja)" :: C.Selector) C.? ("font-family" C.-: "var(--font-ja)")
+    (":lang(zh-Hant)" :: C.Selector) C.? ("font-family" C.-: "var(--font-hant)")
+    (":lang(zh-TW)" :: C.Selector) C.? ("font-family" C.-: "var(--font-hant)")
+    (":lang(zh-HK)" :: C.Selector) C.? ("font-family" C.-: "var(--font-hant)")
+    (":lang(zh-MO)" :: C.Selector) C.? ("font-family" C.-: "var(--font-hant)")
     C.a C.? do
         "color" C.-: "var(--color-link)"
         C.textDecoration C.underline
@@ -442,12 +456,16 @@ baseRules = do
         C.display C.flex
         "justify-content" C.-: "space-between"
         "gap" C.-: "0 var(--space-nav-gap)"
-    (".post-nav-next" :: C.Selector) C.? ("margin-left" C.-: "auto")
+    (".post-nav-prev" :: C.Selector) C.? ("min-width" C.-: "0")
+    (".post-nav-next" :: C.Selector) C.? do
+        "margin-left" C.-: "auto"
+        "min-width" C.-: "0"
     (".post-nav-label" :: C.Selector) C.? do
         C.display C.block
         "color" C.-: "var(--color-muted)"
         "font-size" C.-: "0.85em"
         "margin-bottom" C.-: "2px"
+    (".post-nav-next .post-nav-label" :: C.Selector) C.? ("text-align" C.-: "right")
     C.a C.# ("aria-hidden" C.@= "true") C.? C.display C.none
     C.mark C.? do
         "background-color" C.-: "var(--color-mark)"

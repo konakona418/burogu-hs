@@ -217,12 +217,8 @@ resolveMathUrl :: Text -> Maybe Text -> IO (Maybe Text)
 resolveMathUrl "none" (Just _) = do
     warn "theme.mathUrl is set but theme.math is none; ignoring it"
     pure Nothing
-resolveMathUrl _ Nothing = do
-    warn "theme.mathUrl is not set in config.yaml; using the default CDN URL"
-    pure Nothing
-resolveMathUrl _ (Just "") = do
-    warn "theme.mathUrl is empty in config.yaml; using the default CDN URL"
-    pure Nothing
+resolveMathUrl _ Nothing = pure Nothing
+resolveMathUrl _ (Just "") = pure Nothing
 resolveMathUrl _ (Just raw)
     | "http://" `T.isPrefixOf` raw || "https://" `T.isPrefixOf` raw = pure (Just raw)
     | otherwise = die ("invalid mathUrl '" <> raw <> "': must start with http:// or https://")

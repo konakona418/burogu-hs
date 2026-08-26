@@ -95,6 +95,8 @@ defaultConfigTemplate =
                 , "  #   body: [\"Helvetica Neue\", \"PingFang SC\", sans-serif]"
                 , "  #   display: [Georgia, \"Noto Serif CJK SC\", \"Songti SC\", SimSun, serif]"
                 , "  #   code: [ui-monospace, Menlo, monospace]"
+                , "  #   ja: [\"Hiragino Sans\", \"Noto Sans JP\", sans-serif]"
+                , "  #   hant: [\"PingFang TC\", \"Noto Sans TC\", sans-serif]"
                 , "  #   size: 17px"
                 , "  #   lineHeight: 28px"
                 , "  #   files:             # optional: embed font files (copied to site/fonts/, @font-face generated)"

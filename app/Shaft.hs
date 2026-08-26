@@ -45,6 +45,8 @@ shaftBaseTokens =
     , ("color-mark", "#ffd97a")
     , ("color-accent", "#c4000e")
     , ("font-family", "Georgia, \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Songti SC\", \"SimSun\", serif")
+    , ("font-ja", "\"Hiragino Mincho\", \"Yu Mincho\", \"Noto Serif JP\", \"Noto Serif CJK JP\", serif")
+    , ("font-hant", "\"Songti TC\", \"PMingLiU\", \"Noto Serif TC\", \"Noto Serif CJK TC\", serif")
     , ("font-size", "17px")
     , ("line-height", "28px")
     , ("content-width", "800px")

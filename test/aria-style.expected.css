@@ -9,6 +9,8 @@
   --color-code-bg    : #f5f5f5;
   --color-mark       : #ffe58f;
   --font-family      : "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-ja          : "Hiragino Sans", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+  --font-hant        : "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Noto Sans CJK TC", sans-serif;
   --font-size        : 17px;
   --line-height      : 28px;
   --content-width    : 800px;
@@ -154,6 +156,31 @@ body
   color            : var(--color-text);
   background-color : var(--color-bg);
   overflow-wrap    : anywhere;
+}
+
+:lang(ja)
+{
+  font-family : var(--font-ja);
+}
+
+:lang(zh-Hant)
+{
+  font-family : var(--font-hant);
+}
+
+:lang(zh-TW)
+{
+  font-family : var(--font-hant);
+}
+
+:lang(zh-HK)
+{
+  font-family : var(--font-hant);
+}
+
+:lang(zh-MO)
+{
+  font-family : var(--font-hant);
 }
 
 a
@@ -433,9 +460,15 @@ nav
   gap             : 0 var(--space-nav-gap);
 }
 
+.post-nav-prev
+{
+  min-width : 0;
+}
+
 .post-nav-next
 {
   margin-left : auto;
+  min-width   : 0;
 }
 
 .post-nav-label
@@ -444,6 +477,11 @@ nav
   color         : var(--color-muted);
   font-size     : 0.85em;
   margin-bottom : 2px;
+}
+
+.post-nav-next .post-nav-label
+{
+  text-align : right;
 }
 
 a[aria-hidden='true']
@@ -777,6 +815,11 @@ nav
 .post-nav-next
 {
   margin-left : 0;
+}
+
+.post-nav-next .post-nav-label
+{
+  text-align : left;
 }
 
 }
