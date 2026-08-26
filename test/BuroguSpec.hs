@@ -1840,6 +1840,7 @@ configFormatValues =
                     , cvDeploy = Just [("target", "user@host:/var/www/x")]
                     , cvSrcRepo = Just "git@github.com:user/site.git"
                     , cvTheme = [("preset", "shaft"), ("extraCss", "[theme.css]")]
+                    , cvMathUrl = Just "https://custom.example/math.js"
                     , cvExtraJs = Just "[theme.js]"
                     , cvFonts = Just [("size", "18px")]
                     , cvFontsFiles = Just "files:\n  - src: fonts/my.woff2\n    family: My Serif\n    weight: 400\n    style: normal\n"

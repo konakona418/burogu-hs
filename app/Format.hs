@@ -122,9 +122,11 @@ configValues raw =
         , cvTheme =
             [ ("preset", rawPreset t ?: "aria")
             , ("math", rawMath t ?: "mathjax")
-            , ("mathUrl", rawMathUrl t ?: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js")
             , ("extraCss", fmap (inlineList . map scalar) (rawExtraCss t) ?: "[theme.css]")
             ]
+        , cvMathUrl = case rawMathUrl t of
+            Just u | not (T.null u) -> Just u
+            _ -> Nothing
         , cvExtraJs = fmap (inlineList . map scalar) (rawExtraJs t)
         , cvFonts = fmap fontsValues (rawFonts t)
         , cvFontsFiles = fmap renderFontFiles (fontsFiles (fromMaybe emptyFonts (rawFonts t)))

@@ -16,8 +16,8 @@ footerSeparator:  ·   # separator between footer links; set to empty to disable
 theme:
   preset: aria  # aria | shaft (built-in theme presets)
   math: mathjax  # none | mathjax | katex
-  mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js  # optional: override the CDN URL
   extraCss: [theme.css]
+  # mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js  # optional: override the CDN URL (defaults to the CDN of theme.math)
   # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page
   # fonts:               # optional: override the preset's font styles
   #   body: ["Helvetica Neue", "PingFang SC", sans-serif]

@@ -26,6 +26,8 @@ data ConfigTemplate = ConfigTemplate
     , ctSrcRepoComment :: Text
     , ctSrcRepo :: TemplateLine
     , ctTheme :: [TemplateLine]
+    , ctMathUrlComment :: Text
+    , ctMathUrl :: TemplateLine
     , ctExtraJsComment :: Text
     , ctExtraJs :: TemplateLine
     , ctFontsComment :: Text
@@ -42,13 +44,14 @@ data ConfigValues = ConfigValues
     , cvDeploy :: Maybe [(Text, Text)]
     , cvSrcRepo :: Maybe Text
     , cvTheme :: [(Text, Text)]
+    , cvMathUrl :: Maybe Text
     , cvExtraJs :: Maybe Text
     , cvFonts :: Maybe [(Text, Text)]
     , cvFontsFiles :: Maybe Text
     }
 
 emptyConfigValues :: ConfigValues
-emptyConfigValues = ConfigValues{cvTop = [], cvDeploy = Nothing, cvSrcRepo = Nothing, cvTheme = [], cvExtraJs = Nothing, cvFonts = Nothing, cvFontsFiles = Nothing}
+emptyConfigValues = ConfigValues{cvTop = [], cvDeploy = Nothing, cvSrcRepo = Nothing, cvTheme = [], cvMathUrl = Nothing, cvExtraJs = Nothing, cvFonts = Nothing, cvFontsFiles = Nothing}
 
 defaultConfigTemplate :: ConfigTemplate
 defaultConfigTemplate =
@@ -84,9 +87,10 @@ defaultConfigTemplate =
         , ctTheme =
             [ TemplateLine "preset" "aria" (Just "# aria | shaft (built-in theme presets)")
             , TemplateLine "math" "mathjax" (Just "# none | mathjax | katex")
-            , TemplateLine "mathUrl" "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" (Just "# optional: override the CDN URL")
             , TemplateLine "extraCss" "[theme.css]" (Just "")
             ]
+        , ctMathUrlComment = T.unlines ["  # mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js  # optional: override the CDN URL (defaults to the CDN of theme.math)"]
+        , ctMathUrl = TemplateLine "mathUrl" "" (Just "# optional: override the CDN URL")
         , ctExtraJsComment = T.unlines ["  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"]
         , ctExtraJs = TemplateLine "extraJs" "" (Just "# optional: JS files under src/ loaded on every page")
         , ctFontsComment =
@@ -122,10 +126,26 @@ renderConfig tpl values = T.unlines (concat blocks)
         [ map (renderLine "" (cvTop values)) (ctTop tpl)
         , deployBlock
         , srcRepoBlock
-        , "theme:" : map (renderLine "  " (cvTheme values)) (ctTheme tpl)
+        , "theme:" : themeLines
         , extraJsBlock
         , fontsBlock
         ]
+
+    themeLines :: [Text]
+    themeLines =
+        case cvTheme values of
+            preset : math : _
+                | fst preset == "preset" && fst math == "math" ->
+                    renderLine "  " (cvTheme values) (ctTheme tpl !! 0)
+                        : renderLine "  " (cvTheme values) (ctTheme tpl !! 1)
+                        : mathUrlBlock
+                            <> map (renderLine "  " (cvTheme values)) (drop 2 (ctTheme tpl))
+            _ -> map (renderLine "  " (cvTheme values)) (ctTheme tpl) <> mathUrlBlock
+
+    mathUrlBlock :: [Text]
+    mathUrlBlock = case cvMathUrl values of
+        Nothing -> T.lines (ctMathUrlComment tpl)
+        Just v -> [renderLine "  " [(tlKey (ctMathUrl tpl), v)] (ctMathUrl tpl)]
 
     renderLine :: Text -> [(Text, Text)] -> TemplateLine -> Text
     renderLine indent overrides entry =
