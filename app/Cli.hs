@@ -24,7 +24,7 @@ data Command
     | Draft {dSlug :: Text}
     | Publish {pSlug :: Text}
     | Rename {rOldSlug :: Text, rNewSlug :: Text}
-    | Image {iDigest :: Text, iFile :: FilePath, iQuality :: Maybe Int, iMaxDim :: Maybe Int, iPaths :: Paths}
+    | Image {iDigest :: Text, iFile :: Maybe FilePath, iQuality :: Maybe Int, iMaxDim :: Maybe Int, iClipboard :: Bool, iPaths :: Paths}
     | Deploy {dClearCache :: Bool, dLog :: Bool}
     | Sync {sAction :: Text, sRepo :: Maybe Text, sLog :: Bool}
     | Format {fDryRun :: Bool, fPaths :: Paths}
@@ -53,7 +53,7 @@ commands =
         <> command "draft" (info (Draft <$> slugParser) (progDesc "Create a draft"))
         <> command "publish" (info (Publish <$> slugParser) (progDesc "Publish a draft"))
         <> command "rename" (info (Rename <$> slugParser <*> slugParser) (progDesc "Rename a post (file name only)"))
-        <> command "image" (info (Image <$> digestArg <*> fileArg <*> qualityOption <*> maxDimOption <*> pathsParser) (progDesc "Compress an image into the site (src/img/<digest>/)"))
+        <> command "image" (info (Image <$> digestArg <*> fileArg <*> qualityOption <*> maxDimOption <*> clipboardOption <*> pathsParser) (progDesc "Compress an image into the site (src/img/<digest>/)"))
         <> command "deploy" (info (Deploy <$> clearCacheParser <*> logParser) (progDesc "Build and deploy the site"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser <*> logParser) (progDesc "Sync the site repository with a git remote"))
         <> command "sync" (info (Sync <$> actionParser <*> repoParser <*> logParser) (progDesc "Sync the site repository with a git remote"))
@@ -137,14 +137,17 @@ clearCacheParser = switch (long "clear-cache" <> help "Clear the git deploy cach
 digestArg :: Parser Text
 digestArg = strArgument (metavar "DIGEST" <> help "The post digest (8 hex chars)")
 
-fileArg :: Parser FilePath
-fileArg = strArgument (metavar "FILE" <> help "Image file to compress")
+fileArg :: Parser (Maybe FilePath)
+fileArg = optional (strArgument (metavar "FILE" <> help "Image file to compress (or pass --clipboard)"))
 
 qualityOption :: Parser (Maybe Int)
 qualityOption = optional (option auto (long "quality" <> metavar "N" <> help "JPEG quality (default 85)"))
 
 maxDimOption :: Parser (Maybe Int)
 maxDimOption = optional (option auto (long "max-dim" <> metavar "N" <> help "Longest edge in pixels (default 1600)"))
+
+clipboardOption :: Parser Bool
+clipboardOption = switch (long "clipboard" <> help "Read the image from the wayland clipboard instead of FILE")
 
 dryRunParser :: Parser Bool
 dryRunParser = switch (long "dry-run" <> help "Show changes without writing")

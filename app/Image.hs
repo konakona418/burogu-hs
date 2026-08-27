@@ -1,9 +1,11 @@
 module Image (runImage) where
 
 import Codec.Picture (
+    DynamicImage,
     Image,
     PixelRGBA8,
     convertRGBA8,
+    decodeImage,
     encodeJpegAtQuality,
     generateImage,
     imageHeight,
@@ -12,6 +14,8 @@ import Codec.Picture (
     readImage,
  )
 import Codec.Picture.Types (PixelRGBA8 (..), PixelRGB8 (..), convertImage)
+import Control.Monad (forM)
+import Data.Maybe (catMaybes)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.Maybe (fromMaybe)
@@ -20,47 +24,99 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Word (Word8)
 import Digest (digestOf, fnv1a)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, getFileSize, listDirectory)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, findExecutable, getFileSize, listDirectory)
+import System.Exit (ExitCode (..))
 import System.FilePath ((</>), takeBaseName, takeDirectory)
+import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, std_err, std_out, waitForProcess)
 
 {- | Add an image to the site: compress it (JPEG), store it under
 src/img/<digest>/ named by its content hash, print the compression
-ratio and a copy-pasteable markdown embed.
+ratio and a copy-pasteable markdown embed. With --clipboard the image
+is read from the wayland clipboard (wl-paste) instead of a file.
 -}
-runImage :: FilePath -> Text -> FilePath -> Maybe Int -> Maybe Int -> IO (Either Text ())
-runImage postDir digest imageFile mQuality mMaxDim = do
+runImage :: FilePath -> Text -> Maybe FilePath -> Maybe Int -> Maybe Int -> Bool -> IO (Either Text ())
+runImage postDir digest mImageFile mQuality mMaxDim clipboard = do
     eName <- findPost postDir digest
     case eName of
         Left err -> pure (Left err)
-        Right _ -> do
-            edecoded <- readImage imageFile
-            case edecoded of
-                Left err -> pure (Left (T.pack err))
-                Right dyn -> do
-                    let img = convertRGBA8 dyn
-                        w = imageWidth img
-                        h = imageHeight img
-                        maxDim = fromMaybe 1600 mMaxDim
-                        quality = fromIntegral (fromMaybe 85 mQuality) :: Word8
-                        (nw, nh) = fit w h maxDim
-                        scaled = if nw == w && nh == h then img else resizeBilinear nw nh img
-                        jpeg = LBS.toStrict (encodeJpegAtQuality quality (convertImage (toRGB8 scaled)))
-                        hashName = fnv1aBytes jpeg <> ".jpg"
-                        dir = takeDirectory postDir </> "img" </> T.unpack digest
-                        outPath = dir </> T.unpack hashName
-                    createDirectoryIfMissing True dir
-                    oldSize <- getFileSize imageFile
-                    BS.writeFile outPath jpeg
-                    newSize <- getFileSize outPath
-                    let ratio = if oldSize > 0 then (1 - fromIntegral newSize / fromIntegral oldSize) * 100 :: Double else 0
-                    TIO.putStrLn ("image: " <> T.pack imageFile <> " (" <> T.pack (show w) <> "x" <> T.pack (show h) <> " -> " <> T.pack (show nw) <> "x" <> T.pack (show nh) <> ")")
-                    TIO.putStrLn ("  compressed " <> T.pack (show (round ratio :: Int)) <> "%  " <> T.pack (show oldSize) <> "B -> " <> T.pack (show newSize) <> "B")
-                    TIO.putStrLn ("  " <> markdownEmbed digest hashName imageFile)
-                    pure (Right ())
+        Right _ -> case (mImageFile, clipboard) of
+            (Just _, True) -> pure (Left "FILE and --clipboard are mutually exclusive")
+            (Nothing, False) -> pure (Left "missing image FILE (or pass --clipboard)")
+            (Just f, False) -> do
+                edecoded <- readImage f
+                case edecoded of
+                    Left err -> pure (Left (T.pack err))
+                    Right dyn -> do
+                        oldSize <- getFileSize f
+                        processImage postDir digest (T.pack f) (T.pack (takeBaseName f)) dyn oldSize mQuality mMaxDim
+            (Nothing, True) -> do
+                eimg <- getClipboardImage
+                case eimg of
+                    Left err -> pure (Left err)
+                    Right (dyn, n) -> processImage postDir digest "<clipboard>" "screenshot" dyn (fromIntegral n) mQuality mMaxDim
 
-markdownEmbed :: Text -> Text -> FilePath -> Text
-markdownEmbed digest hashName imageFile =
-    "![" <> T.pack (takeBaseName imageFile) <> "](/img/" <> digest <> "/" <> hashName <> ")"
+{- | Compress, store and report one image. Shared by the file and the
+clipboard input paths.
+-}
+processImage :: FilePath -> Text -> Text -> Text -> DynamicImage -> Integer -> Maybe Int -> Maybe Int -> IO (Either Text ())
+processImage postDir digest displayName alt dyn oldSize mQuality mMaxDim = do
+    let img = convertRGBA8 dyn
+        w = imageWidth img
+        h = imageHeight img
+        maxDim = fromMaybe 1600 mMaxDim
+        quality = fromIntegral (fromMaybe 85 mQuality) :: Word8
+        (nw, nh) = fit w h maxDim
+        scaled = if nw == w && nh == h then img else resizeBilinear nw nh img
+        jpeg = LBS.toStrict (encodeJpegAtQuality quality (convertImage (toRGB8 scaled)))
+        hashName = fnv1aBytes jpeg <> ".jpg"
+        dir = takeDirectory postDir </> "img" </> T.unpack digest
+        outPath = dir </> T.unpack hashName
+    createDirectoryIfMissing True dir
+    BS.writeFile outPath jpeg
+    newSize <- getFileSize outPath
+    let ratio = if oldSize > 0 then (1 - fromIntegral newSize / fromIntegral oldSize) * 100 :: Double else 0
+    TIO.putStrLn ("image: " <> displayName <> " (" <> T.pack (show w) <> "x" <> T.pack (show h) <> " -> " <> T.pack (show nw) <> "x" <> T.pack (show nh) <> ")")
+    TIO.putStrLn ("  compressed " <> T.pack (show (round ratio :: Int)) <> "%  " <> T.pack (show oldSize) <> "B -> " <> T.pack (show newSize) <> "B")
+    TIO.putStrLn ("  " <> markdownEmbed alt digest hashName)
+    pure (Right ())
+
+{- | Read the image from the wayland clipboard: try the common image
+MIME types in order and decode the first one that yields an image.
+-}
+getClipboardImage :: IO (Either Text (DynamicImage, Int))
+getClipboardImage = do
+    exists <- doesExecutableExist "wl-paste"
+    if not exists
+        then pure (Left "wl-paste not found; install wl-clipboard")
+        else do
+            results <- forM clipboardMimes $ \mime -> do
+                (code, bytes) <- runWlPaste mime
+                if code == ExitSuccess && not (BS.null bytes)
+                    then pure (Just (decodeImage bytes, BS.length bytes))
+                    else pure Nothing
+            case catMaybes results of
+                ((Right dyn, n) : _) -> pure (Right (dyn, n))
+                [] -> pure (Left "clipboard has no image")
+                _ -> pure (Left "clipboard image could not be decoded")
+
+clipboardMimes :: [String]
+clipboardMimes = ["image/png", "image/jpeg", "image/bmp", "image/tiff", "image/webp"]
+
+runWlPaste :: String -> IO (ExitCode, BS.ByteString)
+runWlPaste mime = do
+    (_, Just outH, _, ph) <- createProcess (proc "wl-paste" ["--type", mime]){std_out = CreatePipe, std_err = CreatePipe}
+    bytes <- BS.hGetContents outH
+    code <- waitForProcess ph
+    pure (code, bytes)
+
+doesExecutableExist :: String -> IO Bool
+doesExecutableExist name = do
+    found <- findExecutable name
+    pure (maybe False (const True) found)
+
+markdownEmbed :: Text -> Text -> Text -> Text
+markdownEmbed alt digest hashName =
+    "![" <> alt <> "](/img/" <> digest <> "/" <> hashName <> ")"
 
 {- | Find the post whose digest matches, returning its file name.
 -}

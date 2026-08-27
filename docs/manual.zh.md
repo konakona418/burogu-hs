@@ -183,13 +183,15 @@ burogu rename 旧slug 新slug
 粘贴的 markdown 图片行。
 
 ```
-burogu image DIGEST 文件 [--quality N] [--max-dim N]
+burogu image DIGEST 文件 [--quality N] [--max-dim N] [--clipboard]
 ```
 
 `DIGEST`      文章的 digest（见 format 写入的
               `<!-- digest: xxxxxxxx -->` 注释）
 `--quality`   JPEG 质量（默认 85）
 `--max-dim`   最长边像素数（默认 1600）
+`--clipboard` 改从 wayland 剪贴板读图（wl-paste；alt 文本为
+              "screenshot"）
 
 图片目录发布为 `/img/DIGEST/...`。
 

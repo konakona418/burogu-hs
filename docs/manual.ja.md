@@ -203,13 +203,15 @@ burogu rename 旧slug 新slug
 markdown 画像行を表示します。
 
 ```
-burogu image DIGEST ファイル [--quality N] [--max-dim N]
+burogu image DIGEST ファイル [--quality N] [--max-dim N] [--clipboard]
 ```
 
 `DIGEST`      記事の digest（format が書く `<!-- digest:
               xxxxxxxx -->` コメントを参照）
 `--quality`   JPEG 品質（既定 85）
 `--max-dim`   長辺のピクセル数（既定 1600）
+`--clipboard` wayland クリップボードから画像を読む（wl-paste。
+              alt テキストは "screenshot"）
 
 画像ディレクトリは `/img/DIGEST/...` として公開されます。
 

@@ -199,13 +199,15 @@ hash, so identical bytes are stored once), print the compression
 ratio and a copy-pasteable markdown image line.
 
 ```
-burogu image DIGEST FILE [--quality N] [--max-dim N]
+burogu image DIGEST FILE [--quality N] [--max-dim N] [--clipboard]
 ```
 
 `DIGEST`      the post's digest (see the `<!-- digest: xxxxxxxx -->`
               comment written by format)
 `--quality`   JPEG quality (default 85)
 `--max-dim`   longest edge in pixels (default 1600)
+`--clipboard` read the image from the wayland clipboard instead of
+              FILE (wl-paste; the alt text is "screenshot")
 
 The image directory is published as `/img/DIGEST/...`.
 

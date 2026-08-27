@@ -2379,7 +2379,7 @@ imageTest =
         savePngImage png (ImageRGB8 (generateImage (\x y -> PixelRGB8 200 80 40) 640 480 :: Image PixelRGB8))
         let digest = digestOf "2026-08-01-hello"
             imgDir = "/tmp/burogu-test/image/img" </> T.unpack digest
-        result <- Image.runImage "/tmp/burogu-test/image/_post" digest png Nothing (Just 300)
+        result <- Image.runImage "/tmp/burogu-test/image/_post" digest (Just png) Nothing (Just 300) False
         case result of
             Left err -> assertBool ("expected success, got " <> T.unpack err) False
             Right () -> do
@@ -2387,6 +2387,10 @@ imageTest =
                 assertBool "jpeg written" (any ("jpg" `T.isSuffixOf`) (map T.pack files))
                 content <- TIO.readFile "/tmp/burogu-test/image/_post/2026-08-01-hello.md"
                 assertBool "post not touched" (not ("img" `T.isInfixOf` content))
+        both <- Image.runImage "/tmp/burogu-test/image/_post" digest (Just png) Nothing Nothing True
+        assertBool "FILE and --clipboard are mutually exclusive" (isLeft both)
+        none <- Image.runImage "/tmp/burogu-test/image/_post" digest Nothing Nothing Nothing False
+        assertBool "missing FILE is rejected" (isLeft none)
 
 formatMigrationTest :: TestTree
 formatMigrationTest =

@@ -30,7 +30,7 @@ main = do
         Draft slug -> Posts.orDie (Posts.runDraft "src/_post" slug)
         Publish slug -> Posts.orDie (Posts.runPublish "src/_post" slug)
         Rename old new -> Posts.orDie (Posts.runRename "src/_post" old new)
-        Image digest file mQ mD paths -> Posts.orDie (Image.runImage (pSrc paths </> "_post") digest file mQ mD)
+        Image digest mFile mQ mD clipboard paths -> Posts.orDie (Image.runImage (pSrc paths </> "_post") digest mFile mQ mD clipboard)
         Deploy clear log_ -> Deploy.run clear log_
         Sync action mRepo log_ -> Sync.run action mRepo log_
         Format dryRun paths -> Format.run paths dryRun
