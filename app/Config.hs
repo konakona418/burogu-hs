@@ -123,7 +123,7 @@ loadConfig path = do
     case econtent of
         Left e
             | isDoesNotExistError e -> do
-                warn "config.yaml not found; using default configuration:"
+                warn (T.pack path <> " not found; using the default configuration:")
                 warn ("  siteName        = " <> siteName defaults)
                 warn ("  siteAuthor      = " <> siteAuthor defaults)
                 warn ("  siteDescription = " <> siteDescription defaults)

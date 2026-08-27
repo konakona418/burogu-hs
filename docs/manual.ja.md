@@ -178,17 +178,53 @@ burogu publish SLUG
 正規化されます。ファイル名は変わりません。スラッグが見つから
 ないか、ファイルが下書きでない場合はエラーになります。
 
+### rename
+
+記事のファイル名を変更します。日付プレフィックスと frontmatter は
+そのまま残ります。
+
+```
+burogu rename 旧slug 新slug
+```
+
+`旧slug`  現在の slug
+`新slug`  新しい slug
+
+ファイルは `YYYY-MM-DD-新slug.md` になります。digest は名前とともに
+変わるため既存 URL は壊れ、`format` は記事の画像ディレクトリ
+（`src/img/<digest>/`）を移動します。
+
+### image
+
+画像をサイトに圧縮して取り込みます：縮小（バイリニア、既定で
+長辺 1600 px）、JPEG エンコード（既定の品質 85）、
+`src/img/DIGEST/<hash>.jpg` として保存（内容ハッシュで命名する
+ため同じバイト列は 1 回だけ保存）、圧縮率と貼り付け可能な
+markdown 画像行を表示します。
+
+```
+burogu image DIGEST ファイル [--quality N] [--max-dim N]
+```
+
+`DIGEST`      記事の digest（format が書く `<!-- digest:
+              xxxxxxxx -->` コメントを参照）
+`--quality`   JPEG 品質（既定 85）
+`--max-dim`   長辺のピクセル数（既定 1600）
+
+画像ディレクトリは `/img/DIGEST/...` として公開されます。
+
 ### deploy
 
 サイトを生成し、`config.yaml` の `deploy` 節に従って公開します
 （DEPLOYMENT 節参照）。
 
 ```
-burogu deploy [--clear-cache]
+burogu deploy [--clear-cache] [--log]
 ```
 
 `--clear-cache`  永続 git キャッシュを削除する（git モードのみ。
                  次回デプロイはゼロから取得し直す）
+`--log`          git 自身の詳細出力を表示する（push、fetch、commit）
 
 ### sync
 
@@ -196,11 +232,12 @@ burogu deploy [--clear-cache]
 git リモートと同期します（SYNC 節参照）。
 
 ```
-burogu sync ACTION [REPO]
+burogu sync ACTION [REPO] [--log]
 ```
 
 `ACTION`  push または pull
 `REPO`    git リポジトリ URL（デフォルト：config.yaml の `srcRepo`）
+`--log`   git 自身の詳細出力を表示する（push、fetch、commit）
 
 ### format
 
@@ -214,7 +251,9 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 `--dry-run`  書き込まずに変更内容だけを表示する
 
-記事には `title, date, tags, description, draft, toc` が付きます
+記事には `title, date, tags, description, draft, toc` が付き、さらに
+`<!-- digest: xxxxxxxx -->` コメント（ファイル名の 8 桁 hex ハッシュ）
+が記事の画像ディレクトリのアンカーとして付きます
 （frontmatter に日付がない場合はファイル名プレフィックスから
 取得。下書きは日付を省略可）。ページには `title, priority,
 placement, redirectAs` が付きます。空の `description`/

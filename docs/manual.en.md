@@ -174,17 +174,54 @@ when there is none; `draft: true` becomes `draft: false` and the
 frontmatter is normalized. The filename does not change. Publish
 fails when the slug is missing or the file is not a draft.
 
+### rename
+
+Rename a post. Only the file name changes: the date prefix and the
+frontmatter are left alone.
+
+```
+burogu rename OLD_SLUG NEW_SLUG
+```
+
+`OLD_SLUG`  current slug
+`NEW_SLUG`  new slug
+
+The file becomes `YYYY-MM-DD-NEW_SLUG.md`. The digest changes with
+the name, so existing URLs break and `format` moves the post's image
+directory (`src/img/<digest>/`).
+
+### image
+
+Compress an image into the site: downscale it (bilinear, longest
+edge 1600 px by default), encode it as a JPEG (quality 85 by
+default), store it as `src/img/DIGEST/<hash>.jpg` (named by content
+hash, so identical bytes are stored once), print the compression
+ratio and a copy-pasteable markdown image line.
+
+```
+burogu image DIGEST FILE [--quality N] [--max-dim N]
+```
+
+`DIGEST`      the post's digest (see the `<!-- digest: xxxxxxxx -->`
+              comment written by format)
+`--quality`   JPEG quality (default 85)
+`--max-dim`   longest edge in pixels (default 1600)
+
+The image directory is published as `/img/DIGEST/...`.
+
 ### deploy
 
 Build the site, then publish it per the `deploy` section of
 `config.yaml` (see DEPLOYMENT).
 
 ```
-burogu deploy [--clear-cache]
+burogu deploy [--clear-cache] [--log]
 ```
 
 `--clear-cache`  remove the persistent git cache (git mode only; the
                  next deploy re-fetches from scratch)
+`--log`          show git's own verbose output (pushes, fetches,
+                 commits)
 
 ### sync
 
@@ -192,11 +229,12 @@ Synchronize the site repository (the directory holding `config.yaml`
 and `src/`) with a git remote (see SYNC).
 
 ```
-burogu sync ACTION [REPO]
+burogu sync ACTION [REPO] [--log]
 ```
 
 `ACTION`  push or pull
 `REPO`    git repository URL (default: `srcRepo` from config.yaml)
+`--log`   show git's own verbose output (pushes, fetches, commits)
 
 ### format
 
@@ -212,7 +250,9 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 
 Posts get `title, date, tags, description, draft, toc` (the date comes
 from the filename prefix when the frontmatter has none; drafts may
-omit it). Pages get `title, priority, placement, redirectAs`.
+omit it) plus a `<!-- digest: xxxxxxxx -->` comment (an 8-hex hash
+of the file name) anchoring the post's image directory. Pages get
+`title, priority, placement, redirectAs`.
 Empty `description`/`redirectAs` fields are not written. Unknown
 frontmatter keys are kept (sorted) with a warning; comments in the
 frontmatter are not preserved.

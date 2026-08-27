@@ -1,4 +1,4 @@
-module Posts (orDie, runDraft, runNew, runPublish) where
+module Posts (orDie, runDraft, runNew, runPublish, runRename) where
 
 import Control.Monad (unless)
 import Data.Aeson (Value (..))
@@ -12,7 +12,7 @@ import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.Clock (getCurrentTime, utctDay)
 import Data.Yaml (decodeEither', encode)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
-import System.Directory (doesFileExist, listDirectory)
+import System.Directory (doesFileExist, listDirectory, renameFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 import System.IO (stderr)
@@ -67,6 +67,32 @@ runPublish dir slug = case validateSlug slug of
             [] -> pure (Left ("no draft found for '" <> slug <> "' in " <> T.pack dir))
             [_] -> publishOne dir (head files)
             _ -> pure (Left ("multiple files match slug '" <> slug <> "': " <> T.intercalate ", " (map T.pack files)))
+
+runRename :: FilePath -> Text -> Text -> IO (Either Text FilePath)
+runRename dir oldSlug newSlug = case validateSlug newSlug of
+    Left err -> pure (Left err)
+    Right () -> do
+        files <- matches dir oldSlug
+        case files of
+            [] -> pure (Left ("no post found for '" <> oldSlug <> "' in " <> T.pack dir))
+            [_] -> do
+                eFree <- ensureSlugFree dir newSlug
+                case eFree of
+                    Left err -> pure (Left err)
+                    Right () -> renameOne dir (head files) newSlug
+            _ -> pure (Left ("multiple files match slug '" <> oldSlug <> "': " <> T.intercalate ", " (map T.pack files)))
+
+{- | Rename a post file only: keep the date prefix, change the slug,
+leave the frontmatter untouched.
+-}
+renameOne :: FilePath -> FilePath -> Text -> IO (Either Text FilePath)
+renameOne dir file newSlug = do
+    let oldPath = dir </> file
+        newFile = T.unpack (T.take 10 (T.pack file)) <> "-" <> T.unpack newSlug <> ".md"
+        newPath = dir </> newFile
+    renameFile oldPath newPath
+    TIO.putStrLn ("renamed " <> T.pack oldPath <> " -> " <> T.pack newPath)
+    pure (Right newPath)
 
 publishOne :: FilePath -> FilePath -> IO (Either Text FilePath)
 publishOne dir file = do

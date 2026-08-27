@@ -23,8 +23,10 @@ data Command
     | New {nSlug :: Text}
     | Draft {dSlug :: Text}
     | Publish {pSlug :: Text}
-    | Deploy {dClearCache :: Bool}
-    | Sync {sAction :: Text, sRepo :: Maybe Text}
+    | Rename {rOldSlug :: Text, rNewSlug :: Text}
+    | Image {iDigest :: Text, iFile :: FilePath, iQuality :: Maybe Int, iMaxDim :: Maybe Int, iPaths :: Paths}
+    | Deploy {dClearCache :: Bool, dLog :: Bool}
+    | Sync {sAction :: Text, sRepo :: Maybe Text, sLog :: Bool}
     | Format {fDryRun :: Bool, fPaths :: Paths}
     | Doc {dSection :: Maybe Text, dLang :: Maybe Text, dColor :: Maybe Text}
 
@@ -50,8 +52,11 @@ commands =
         <> command "new" (info (New <$> slugParser) (progDesc "Create a post"))
         <> command "draft" (info (Draft <$> slugParser) (progDesc "Create a draft"))
         <> command "publish" (info (Publish <$> slugParser) (progDesc "Publish a draft"))
-        <> command "deploy" (info (Deploy <$> clearCacheParser) (progDesc "Build and deploy the site"))
-        <> command "sync" (info (Sync <$> actionParser <*> repoParser) (progDesc "Sync the site repository with a git remote"))
+        <> command "rename" (info (Rename <$> slugParser <*> slugParser) (progDesc "Rename a post (file name only)"))
+        <> command "image" (info (Image <$> digestArg <*> fileArg <*> qualityOption <*> maxDimOption <*> pathsParser) (progDesc "Compress an image into the site (src/img/<digest>/)"))
+        <> command "deploy" (info (Deploy <$> clearCacheParser <*> logParser) (progDesc "Build and deploy the site"))
+        <> command "sync" (info (Sync <$> actionParser <*> repoParser <*> logParser) (progDesc "Sync the site repository with a git remote"))
+        <> command "sync" (info (Sync <$> actionParser <*> repoParser <*> logParser) (progDesc "Sync the site repository with a git remote"))
         <> command "format" (info (Format <$> dryRunParser <*> pathsParser) (progDesc "Normalize config, posts and pages"))
         <> command "doc" (info (Doc <$> sectionParser <*> langParser <*> colorParser) (progDesc "Print the manual"))
 
@@ -123,8 +128,23 @@ dirParser =
 slugParser :: Parser Text
 slugParser = strArgument (metavar "SLUG" <> help "Post slug")
 
+logParser :: Parser Bool
+logParser = switch (long "log" <> help "Show git's own verbose output (pushes, fetches)")
+
 clearCacheParser :: Parser Bool
 clearCacheParser = switch (long "clear-cache" <> help "Clear the git deploy cache")
+
+digestArg :: Parser Text
+digestArg = strArgument (metavar "DIGEST" <> help "The post digest (8 hex chars)")
+
+fileArg :: Parser FilePath
+fileArg = strArgument (metavar "FILE" <> help "Image file to compress")
+
+qualityOption :: Parser (Maybe Int)
+qualityOption = optional (option auto (long "quality" <> metavar "N" <> help "JPEG quality (default 85)"))
+
+maxDimOption :: Parser (Maybe Int)
+maxDimOption = optional (option auto (long "max-dim" <> metavar "N" <> help "Longest edge in pixels (default 1600)"))
 
 dryRunParser :: Parser Bool
 dryRunParser = switch (long "dry-run" <> help "Show changes without writing")

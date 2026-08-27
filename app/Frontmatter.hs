@@ -13,7 +13,7 @@ import Data.Vector qualified as V
 import Data.Yaml (decodeEither', encode)
 import System.FilePath (takeFileName)
 
-data Kind = PostKind | PageKind
+data Kind = PostKind | PageKind deriving (Eq)
 
 {- | Split a markdown file into (frontmatter block, body). The block is
 Nothing when the file does not start with a `---` line (or the block

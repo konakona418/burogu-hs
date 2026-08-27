@@ -161,17 +161,50 @@ burogu publish SLUG
 變為 `draft: false` 並正規化 frontmatter。檔名不變。slug 不存在
 或檔案不是草稿時報錯。
 
+### rename
+
+重新命名文章。只改檔案名稱：日期前綴與 frontmatter 原樣保留。
+
+```
+burogu rename 舊slug 新slug
+```
+
+`舊slug`  目前 slug
+`新slug`  新 slug
+
+檔案變成 `YYYY-MM-DD-新slug.md`。digest 隨名字變化，既有 URL
+會失效，`format` 會把文章的圖片目錄（`src/img/<digest>/`）搬走。
+
+### image
+
+把圖片壓縮進站台：縮小尺寸（雙線性，預設最長邊 1600 像素）、
+編碼為 JPEG（預設品質 85）、存為 `src/img/DIGEST/<hash>.jpg`
+（依內容雜湊命名，相同位元組只存一份）、印出壓縮比例與可直接
+貼上的 markdown 圖片行。
+
+```
+burogu image DIGEST 檔案 [--quality N] [--max-dim N]
+```
+
+`DIGEST`      文章的 digest（見 format 寫入的
+              `<!-- digest: xxxxxxxx -->` 註解）
+`--quality`   JPEG 品質（預設 85）
+`--max-dim`   最長邊像素數（預設 1600）
+
+圖片目錄發布為 `/img/DIGEST/...`。
+
 ### deploy
 
 建置站台，然後依 `config.yaml` 的 `deploy` 節發布（見
 DEPLOYMENT 節）。
 
 ```
-burogu deploy [--clear-cache]
+burogu deploy [--clear-cache] [--log]
 ```
 
 `--clear-cache`  清空持久 git 快取（僅 git 模式；下次部署會從零
                  重新抓取）
+`--log`          顯示 git 自身的詳細輸出（推送、抓取、提交）
 
 ### sync
 
@@ -179,11 +212,12 @@ burogu deploy [--clear-cache]
 同步（見 SYNC 節）。
 
 ```
-burogu sync ACTION [REPO]
+burogu sync ACTION [REPO] [--log]
 ```
 
 `ACTION`  push 或 pull
 `REPO`    git 儲存庫位址（預設：config.yaml 的 `srcRepo`）
+`--log`   顯示 git 自身的詳細輸出（推送、抓取、提交）
 
 ### format
 
@@ -197,7 +231,9 @@ burogu format [--dry-run] [--config PATH] [--src DIR]
 `--dry-run`  只展示將寫內容，不落盤
 
 文章得到 `title, date, tags, description, draft, toc`（frontmatter 沒有
-日期時從檔案名稱前綴取；草稿可省略日期）。頁面得到 `title,
+日期時從檔案名稱前綴取；草稿可省略日期），並帶 `<!-- digest:
+xxxxxxxx -->` 註解（檔案名稱的 8 位十六進位雜湊），作為文章圖片目錄
+的錨點。頁面得到 `title,
 priority, placement, redirectAs`。空的 `description`/
 `redirectAs` 不寫入。未知 frontmatter 鍵保留（依字典序）並警告；
 frontmatter 裡的註解不保留。

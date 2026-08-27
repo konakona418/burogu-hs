@@ -11,6 +11,7 @@ import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
+import System.FilePath ((</>))
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
@@ -19,7 +20,10 @@ import Data.Yaml (ParseException, decodeEither')
 import Doc (OutputStyle (..), extractSection, langFromLocale, manualContent, render, sections)
 import Eval (LangError (..), runScript)
 import Feed (feedUrl, renderAtom)
+import Codec.Picture (DynamicImage (..), Image (..), PixelRGB8 (..), generateImage, savePngImage)
+import Digest (digestOf)
 import Format (formatOne)
+import Image qualified
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
 import Html (groupByTag, render404, renderArchive, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl)
 import I18n (UILang (..), fromSiteLang, messages, tWith)
@@ -30,7 +34,7 @@ import Page (CustomPage (..), Placement (..), loadPage, loadPages)
 import Parser (parseProgram)
 import Paths_burogu ()
 import Post (Post (..), TocEntry (..), mathMethod, parsePost, warnCaseTags)
-import Posts (runDraft, runNew, runPublish)
+import Posts (runDraft, runNew, runPublish, runRename)
 import Registry (SitePages (..), classifyPages, footerItems, navItems)
 import Scripts (evalScript, scriptCtx)
 import Search (renderSearch, renderSearchIndex)
@@ -156,6 +160,9 @@ tests =
             , footerItemsTest
             , footerLinksRendered
             , footerSeparatorConfig
+            , digestCommentTest
+            , renamePostTest
+            , imageTest
             , formatMigrationTest
             , notFoundInNavByDefault
             , navPriorityOrder
@@ -1862,7 +1869,7 @@ formatWritesFile =
         result <- formatOne False "/tmp/burogu-test/fmt-write/_post" PostKind "2026-08-01-hello.md"
         assertEqual "no errors" False result
         content <- readFile "/tmp/burogu-test/fmt-write/_post/2026-08-01-hello.md"
-        assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n---\n\nbody\n" (T.pack content)
+        assertEqual "normalized" "---\ntitle: Hello\ndate: 2026-08-01\ntags: []\ndraft: false\ntoc: false\n---\n<!-- digest: 415097e5 -->\n\nbody\n" (T.pack content)
 
 dslTests :: [TestTree]
 dslTests =
@@ -2344,6 +2351,43 @@ footerSeparatorConfig =
         let page2 = renderHtml (renderIndex testConfig{siteFooterSeparator = ""} [] [("A", "/a/"), ("B", "/b/")] "/style.css" Nothing [])
         assertBool "empty separator" ("A</a><a href=\"/b/\">B" `textIn` page2)
 
+digestCommentTest :: TestTree
+digestCommentTest =
+    testCase "format writes a stable digest comment for posts" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test/digest/_post"
+        let f = "/tmp/burogu-test/digest/_post/2026-08-01-hello.md"
+        writeFile f "---\ntitle: Hello\ndate: 2026-08-01\n---\n\nbody\n"
+        _ <- formatOne False "/tmp/burogu-test/digest/_post" PostKind "2026-08-01-hello.md"
+        content <- TIO.readFile f
+        assertBool "digest written" ("<!-- digest: " `textIn` content)
+        assertBool "no page digest" (not ("digest" `textIn` normalizePageBlock))
+        content2 <- TIO.readFile f
+        _ <- formatOne False "/tmp/burogu-test/digest/_post" PostKind "2026-08-01-hello.md"
+        content3 <- TIO.readFile f
+        assertEqual "idempotent" content2 content3
+        assertBool "stable value" ("<!-- digest: 415097e5 -->" `textIn` content3)
+  where
+    normalizePageBlock = ""
+
+imageTest :: TestTree
+imageTest =
+    testCase "image compresses into src/img/<digest>/ named by content hash" $ do
+        removePathForcibly "/tmp/burogu-test/image"
+        createDirectoryIfMissing True "/tmp/burogu-test/image/_post"
+        writeFile "/tmp/burogu-test/image/_post/2026-08-01-hello.md" "---\ntitle: Hello\ndate: 2026-08-01\n---\n\nbody\n"
+        let png = "/tmp/burogu-test/image/test.png"
+        savePngImage png (ImageRGB8 (generateImage (\x y -> PixelRGB8 200 80 40) 640 480 :: Image PixelRGB8))
+        let digest = digestOf "2026-08-01-hello"
+            imgDir = "/tmp/burogu-test/image/img" </> T.unpack digest
+        result <- Image.runImage "/tmp/burogu-test/image/_post" digest png Nothing (Just 300)
+        case result of
+            Left err -> assertBool ("expected success, got " <> T.unpack err) False
+            Right () -> do
+                files <- listDirectory imgDir
+                assertBool "jpeg written" (any ("jpg" `T.isSuffixOf`) (map T.pack files))
+                content <- TIO.readFile "/tmp/burogu-test/image/_post/2026-08-01-hello.md"
+                assertBool "post not touched" (not ("img" `T.isInfixOf` content))
+
 formatMigrationTest :: TestTree
 formatMigrationTest =
     testCase "format migrates hiddenInNavbar to placement with a warning" $ do
@@ -2356,3 +2400,23 @@ formatMigrationTest =
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
             Right (fm, _, _) -> assertEqual "mapped false" "title: X\npriority: 100\nplacement: nav\n" fm
         assertBool "invalid enum" (isLeft (normalizeFrontmatter PageKind "/tmp/x/p.md" "title: X\nplacement: sidebar\n"))
+
+renamePostTest :: TestTree
+renamePostTest =
+    testCase "rename keeps the date prefix and leaves frontmatter alone" $ do
+        removePathForcibly "/tmp/burogu-test/rename"
+        createDirectoryIfMissing True "/tmp/burogu-test/rename/_post"
+        writeFile "/tmp/burogu-test/rename/_post/2026-08-01-hello.md" "---\ntitle: Hello\ndate: 2026-08-01\n---\n\nbody\n"
+        result <- runRename "/tmp/burogu-test/rename/_post" "hello" "world"
+        case result of
+            Left err -> assertBool ("expected success, got " <> T.unpack err) False
+            Right path -> do
+                assertBool "new file" ("world.md" `T.isInfixOf` T.pack path)
+                content <- TIO.readFile "/tmp/burogu-test/rename/_post/2026-08-01-world.md"
+                assertBool "frontmatter intact" ("title: Hello" `textIn` content)
+                oldExists <- doesFileExist "/tmp/burogu-test/rename/_post/2026-08-01-hello.md"
+                assertBool "old gone" (not oldExists)
+        conflict <- runRename "/tmp/burogu-test/rename/_post" "world" "world"
+        assertBool "self-rename conflicts" (isLeft conflict)
+        missing <- runRename "/tmp/burogu-test/rename/_post" "nope" "x"
+        assertBool "missing rejected" (isLeft missing)

@@ -4,14 +4,13 @@ import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..))
 import Control.Exception (IOException, catch, throwIO)
 import Css (FontFile (..), Fonts (..), renderCss)
-import Data.Bits (shiftR, xor, (.&.))
-import Data.Char (intToDigit, ord)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as TL
-import Data.Word (Word64)
+import Digest (fnv1a)
+
 import Feed (renderAtom)
 import Html qualified as H
 import Lucid qualified as L
@@ -182,17 +181,6 @@ query string so browsers re-fetch after every change.
 -}
 cssHref :: Text -> Text
 cssHref css = "/style.css?v=" <> fnv1a css
-
-{- | FNV-1a 64-bit hash, rendered as 8 hex digits. Good enough for
-cache busting.
--}
-fnv1a :: Text -> Text
-fnv1a = T.pack . take 8 . hex . T.foldl' step offset
-  where
-    offset = 0xcbf29ce484222325 :: Word64
-    step h c = (h `xor` fromIntegral (ord c)) * 0x100000001b3
-    hex 0 = ""
-    hex n = hex (n `shiftR` 4) <> [intToDigit (fromIntegral (n .&. 0xf))]
 
 {- | Copy embedded font files into site/fonts/. The @font-face rules
 reference them as /fonts/<basename> (site-root absolute).

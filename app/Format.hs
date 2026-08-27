@@ -3,22 +3,24 @@ module Format (formatOne, run) where
 import Cli (Paths (..))
 import Config (RawConfig (..), RawDeploy (..), RawTheme (..), knownConfigKeys)
 import Control.Exception (IOException, catch)
-import Control.Monad (foldM, unless)
+import Control.Monad (foldM, unless, when)
 import Css (FontFile (..), Fonts (..), emptyFonts)
 import Data.Aeson (Value (..))
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.List (sortOn)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Text.IO qualified as TIO
 import Data.Yaml (ParseException, decodeEither', encode)
+import Digest (digestOf)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
-import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import System.Directory (doesDirectoryExist, doesFileExist, listDirectory, renameDirectory)
 import System.Exit (exitFailure)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import System.IO (stderr)
 import Template (ConfigValues (..), defaultConfigTemplate, renderConfig)
 
@@ -67,7 +69,16 @@ formatDir paths dryRun dirName kind = do
         then pure False
         else do
             names <- sortOn id . filter (T.isSuffixOf ".md" . T.pack) <$> listDirectory dir
-            foldM (\acc name -> (|| acc) <$> formatOne dryRun dir kind name) False names
+            case kind of
+                PostKind -> do
+                    let digests = map (digestOf . T.dropEnd 3 . T.pack) names
+                        dups = [d | (d, n) <- Map.toList (Map.fromListWith (+) [(d, 1 :: Int) | d <- digests]), n > 1]
+                    case dups of
+                        [] -> foldM (\acc name -> (|| acc) <$> formatOne dryRun dir kind name) False names
+                        d : _ -> do
+                            reportError ("duplicate digest '" <> d <> "': rename one of the affected posts to resolve")
+                            pure True
+                PageKind -> foldM (\acc name -> (|| acc) <$> formatOne dryRun dir kind name) False names
 
 formatOne :: Bool -> FilePath -> Kind -> String -> IO Bool
 formatOne dryRun dir kind filename = do
@@ -82,7 +93,12 @@ formatOne dryRun dir kind filename = do
         Right (normalized, unknownKeys, warnings) -> do
             mapM_ (\k -> reportWarning (path <> ":") k "kept as-is") unknownKeys
             mapM_ (reportNote (T.pack path <> ":")) warnings
-            let newContent = "---\n" <> normalized <> "---\n" <> body
+            let newDigest = digestOf (T.dropEnd 3 (T.pack filename))
+                body' = case kind of
+                    PostKind -> applyDigest newDigest body
+                    PageKind -> body
+                newContent = "---\n" <> normalized <> "---\n" <> body'
+            migrateImgDir dryRun kind (takeDirectory dir) (readDigest body) newDigest
             if newContent == content
                 then pure False
                 else do
@@ -93,6 +109,31 @@ formatOne dryRun dir kind filename = do
                         else TIO.putStrLn ("formatted " <> T.pack path <> ":")
                     unless dryRun (TIO.writeFile path newContent)
                     pure False
+
+{- | When a post's digest changes (its file name changed), move the
+image directory src/img/<old>/ to src/img/<new>/. -}
+migrateImgDir :: Bool -> Kind -> FilePath -> Maybe Text -> Text -> IO ()
+migrateImgDir dryRun kind srcRoot mOld new
+    | kind /= PostKind = pure ()
+    | Just old <- mOld, old /= new = do
+        let imgRoot = srcRoot </> "img"
+            oldDir = imgRoot </> T.unpack old
+            newDir = imgRoot </> T.unpack new
+        exists <- doesDirectoryExist oldDir
+        when exists $ do
+            if dryRun
+                then TIO.putStrLn ("would move " <> T.pack oldDir <> " -> " <> T.pack newDir)
+                else do
+                    renameDirectory oldDir newDir
+                    TIO.putStrLn ("moved " <> T.pack oldDir <> " -> " <> T.pack newDir)
+    | otherwise = pure ()
+
+{- | Read the digest of the current frontmatter comment, if present. -}
+readDigest :: Text -> Maybe Text
+readDigest body = do
+    rest <- T.stripPrefix "<!-- digest: " body
+    let (d, after) = T.breakOn " -->" rest
+    if T.null after then Nothing else Just d
 
 configValues :: RawConfig -> ConfigValues
 configValues raw =
@@ -183,6 +224,16 @@ warnUnknownConfigKeys prefix content =
         Right (Object o) ->
             mapM_ (\k -> reportWarning prefix k "will be dropped") [k | k <- map K.toText (KM.keys o), k `notElem` knownConfigKeys]
         _ -> pure ()
+
+-- | Insert or refresh the digest comment at the top of a post body.
+applyDigest :: Text -> Text -> Text
+applyDigest digest body
+    | Just rest <- T.stripPrefix "<!-- digest: " body =
+        let (old, after) = T.breakOn "-->" rest
+         in if T.strip old == digest
+                then body
+                else "<!-- digest: " <> digest <> " -->" <> after
+    | otherwise = "<!-- digest: " <> digest <> " -->\n" <> body
 
 reportError :: Text -> IO ()
 reportError = TIO.hPutStrLn stderr . ("error: " <>)

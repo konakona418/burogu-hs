@@ -16,8 +16,8 @@ import System.Process (proc, readCreateProcessWithExitCode)
 src/) with a remote git repo. Runs git in the current directory; the
 remote URL comes from the argument, falling back to config's srcRepo.
 -}
-run :: Text -> Maybe Text -> IO ()
-run action mRepo = do
+run :: Text -> Maybe Text -> Bool -> IO ()
+run action mRepo verbose = do
     config <- loadConfig (pConfig defaultPaths)
     let repo = maybe (siteSrcRepo config) Just mRepo
     case repo of
@@ -26,8 +26,8 @@ run action mRepo = do
             TIO.hPutStrLn stderr "usage: cabal run burogu -- sync [push|pull] [repo-url]  or set srcRepo in config.yaml"
             exitFailure
         Just r -> case action of
-            "pull" -> pull r
-            "push" -> push r
+            "pull" -> pull verbose r
+            "push" -> push verbose r
             _ -> do
                 TIO.hPutStrLn stderr ("error: unknown action " <> action <> " (expected push or pull)")
                 exitFailure
@@ -35,27 +35,27 @@ run action mRepo = do
 {- | Point the origin remote at the given URL: set-url when origin
 already exists, add otherwise.
 -}
-ensureRemote :: Text -> IO ()
-ensureRemote repo = do
+ensureRemote :: Bool -> Text -> IO ()
+ensureRemote verbose repo = do
     (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["remote", "get-url", "origin"]) ""
     let url = T.unpack repo
     if code == ExitSuccess
-        then runGit ["remote", "set-url", "origin", url]
-        else runGit ["remote", "add", "origin", url]
+        then runGit verbose ["remote", "set-url", "origin", url]
+        else runGit verbose ["remote", "add", "origin", url]
 
-push :: Text -> IO ()
-push repo = do
-    ensureRemote repo
-    runGit ["add", "-A"]
+push :: Bool -> Text -> IO ()
+push verbose repo = do
+    ensureRemote verbose repo
+    runGit verbose ["add", "-A"]
     (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]) ""
     unless (code == ExitSuccess) $ do
         message <- syncMessage
-        runGit ["commit", "-q", "-m", message]
+        runGit verbose ["commit", "-q", "-m", message]
     synced <- sameAsRemote
     if code == ExitSuccess && synced
         then TIO.putStrLn "nothing to push"
         else do
-            runGit ["push", "--quiet", "origin", "HEAD"]
+            runGit verbose ["push", "--quiet", "origin", "HEAD"]
             TIO.putStrLn ("pushed site to " <> repo)
 sameAsRemote :: IO Bool
 sameAsRemote = do
@@ -82,21 +82,29 @@ gitOut args = do
 {- | Remote wins: fetch and hard-reset the whole site (config + src) to
 the remote's HEAD.
 -}
-pull :: Text -> IO ()
-pull repo = do
-    ensureRemote repo
-    runGit ["fetch", "--quiet", "origin"]
+pull :: Bool -> Text -> IO ()
+pull verbose repo = do
+    ensureRemote verbose repo
+    runGit verbose ["fetch", "--quiet", "origin"]
     ref <- remoteRef
-    runGit ["reset", "--hard", ref]
+    runGit verbose ["reset", "--hard", ref]
     TIO.putStrLn ("pulled site from " <> repo)
 
 syncMessage :: IO String
 syncMessage = formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" <$> getCurrentTime
 
-runGit :: [String] -> IO ()
-runGit args = do
-    (code, out, err) <- readCreateProcessWithExitCode (proc "git" args) ""
-    unless (code == ExitSuccess) $ do
-        TIO.putStrLn (T.pack out)
-        TIO.hPutStrLn stderr (T.pack err)
-        exitFailure
+{- | Run git. With verbose, drop the silent flags and forward the
+tool's own output; otherwise print it only on failure.
+-}
+runGit :: Bool -> [String] -> IO ()
+runGit verbose args = do
+    let args' = if verbose then filter (`notElem` ["--quiet", "-q"]) args else args
+    (code, out, err) <- readCreateProcessWithExitCode (proc "git" args') ""
+    if verbose
+        then do
+            TIO.putStr (T.pack out)
+            TIO.hPutStr stderr (T.pack err)
+        else unless (code == ExitSuccess) $ do
+            TIO.putStrLn (T.pack out)
+            TIO.hPutStrLn stderr (T.pack err)
+    unless (code == ExitSuccess) exitFailure
