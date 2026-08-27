@@ -279,7 +279,7 @@ postsPublishPromotes =
         removePathForcibly "/tmp/burogu-test/posts-pub"
         createDirectoryIfMissing True "/tmp/burogu-test/posts-pub/_post"
         writeFile "/tmp/burogu-test/posts-pub/_post/2026-08-01-notes.md" "---\ntitle: notes\ntags: [essay]\ndraft: true\n---\n\nbody\n"
-        result <- runPublish "/tmp/burogu-test/posts-pub/_post" "notes"
+        result <- runPublish "/tmp/burogu-test/posts-pub/_post" (digestOf "2026-08-01-notes")
         case result of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
             Right path -> do
@@ -296,7 +296,7 @@ postsPublishNonDraftRejected =
         removePathForcibly "/tmp/burogu-test/posts-reg"
         createDirectoryIfMissing True "/tmp/burogu-test/posts-reg/_post"
         writeFile "/tmp/burogu-test/posts-reg/_post/2026-08-01-notes.md" "---\ntitle: notes\n---\n\nbody\n"
-        result <- runPublish "/tmp/burogu-test/posts-reg/_post" "notes"
+        result <- runPublish "/tmp/burogu-test/posts-reg/_post" (digestOf "2026-08-01-notes")
         assertBool "rejected" (isLeft result)
 
 postsPublishMissingRejected :: TestTree
@@ -304,7 +304,7 @@ postsPublishMissingRejected =
     testCase "publish rejects a missing slug" $ do
         removePathForcibly "/tmp/burogu-test/posts-none"
         createDirectoryIfMissing True "/tmp/burogu-test/posts-none/_post"
-        result <- runPublish "/tmp/burogu-test/posts-none/_post" "nope"
+        result <- runPublish "/tmp/burogu-test/posts-none/_post" "ffffffff"
         assertBool "rejected" (isLeft result)
 
 postsPublishLegacyDraft :: TestTree
@@ -313,7 +313,7 @@ postsPublishLegacyDraft =
         removePathForcibly "/tmp/burogu-test/posts-legacy"
         createDirectoryIfMissing True "/tmp/burogu-test/posts-legacy/_post"
         writeFile "/tmp/burogu-test/posts-legacy/_post/old.md" "---\ntitle: old\ndraft: true\n---\n\nbody\n"
-        result <- runPublish "/tmp/burogu-test/posts-legacy/_post" "old"
+        result <- runPublish "/tmp/burogu-test/posts-legacy/_post" (digestOf "old")
         case result of
             Left err -> assertBool ("expected success, got: " <> T.unpack err) False
             Right path -> do
@@ -2411,7 +2411,7 @@ renamePostTest =
         removePathForcibly "/tmp/burogu-test/rename"
         createDirectoryIfMissing True "/tmp/burogu-test/rename/_post"
         writeFile "/tmp/burogu-test/rename/_post/2026-08-01-hello.md" "---\ntitle: Hello\ndate: 2026-08-01\n---\n\nbody\n"
-        result <- runRename "/tmp/burogu-test/rename/_post" "hello" "world"
+        result <- runRename "/tmp/burogu-test/rename/_post" (digestOf "2026-08-01-hello") "world"
         case result of
             Left err -> assertBool ("expected success, got " <> T.unpack err) False
             Right path -> do
@@ -2420,7 +2420,7 @@ renamePostTest =
                 assertBool "frontmatter intact" ("title: Hello" `textIn` content)
                 oldExists <- doesFileExist "/tmp/burogu-test/rename/_post/2026-08-01-hello.md"
                 assertBool "old gone" (not oldExists)
-        conflict <- runRename "/tmp/burogu-test/rename/_post" "world" "world"
+        conflict <- runRename "/tmp/burogu-test/rename/_post" (digestOf "2026-08-01-world") "world"
         assertBool "self-rename conflicts" (isLeft conflict)
-        missing <- runRename "/tmp/burogu-test/rename/_post" "nope" "x"
+        missing <- runRename "/tmp/burogu-test/rename/_post" "ffffffff" "x"
         assertBool "missing rejected" (isLeft missing)

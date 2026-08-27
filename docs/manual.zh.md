@@ -152,25 +152,27 @@ frontmatter 为准。
 发布草稿：补上日期、去掉草稿标记，原地完成。
 
 ```
-burogu publish SLUG
+burogu publish DIGEST
 ```
 
-`SLUG`  文章 slug
+`DIGEST`  文章的 digest（见 format 写入的 `<!-- digest:
+          xxxxxxxx -->` 注释）
 
 日期取 frontmatter 已有的 `date:`，没有则用今天；`draft: true`
-变为 `draft: false` 并规范化 frontmatter。文件名不变。slug 不存在
-或文件不是草稿时报错。
+变为 `draft: false` 并规范化 frontmatter。文件名不变。digest
+不存在或文件不是草稿时报错。
 
 ### rename
 
 重命名文章。只改文件名：日期前缀与 frontmatter 原样保留。
 
 ```
-burogu rename 旧slug 新slug
+burogu rename DIGEST 新slug
 ```
 
-`旧slug`  当前 slug
-`新slug`  新 slug
+`DIGEST`    文章的 digest（见 format 写入的 `<!-- digest:
+             xxxxxxxx -->` 注释）
+`新slug`    新 slug
 
 文件变为 `YYYY-MM-DD-新slug.md`。digest 随名字变化，已有 URL
 会失效，`format` 会把文章的图片目录（`src/img/<digest>/`）搬走。

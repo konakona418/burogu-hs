@@ -164,15 +164,16 @@ creation date; the published date comes from the frontmatter.
 Publish a draft: add the date and drop the draft flag, in place.
 
 ```
-burogu publish SLUG
+burogu publish DIGEST
 ```
 
-`SLUG`  post slug
+`DIGEST`  the post's digest (see the `<!-- digest: xxxxxxxx -->`
+          comment written by format)
 
 The date is taken from an existing `date:` frontmatter, or today
 when there is none; `draft: true` becomes `draft: false` and the
 frontmatter is normalized. The filename does not change. Publish
-fails when the slug is missing or the file is not a draft.
+fails when the digest is unknown or the file is not a draft.
 
 ### rename
 
@@ -180,10 +181,11 @@ Rename a post. Only the file name changes: the date prefix and the
 frontmatter are left alone.
 
 ```
-burogu rename OLD_SLUG NEW_SLUG
+burogu rename DIGEST NEW_SLUG
 ```
 
-`OLD_SLUG`  current slug
+`DIGEST`    the post's digest (see the `<!-- digest: xxxxxxxx -->`
+            comment written by format)
 `NEW_SLUG`  new slug
 
 The file becomes `YYYY-MM-DD-NEW_SLUG.md`. The digest changes with

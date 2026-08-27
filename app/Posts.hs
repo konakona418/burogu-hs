@@ -11,6 +11,7 @@ import Data.Text.IO qualified as TIO
 import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.Clock (getCurrentTime, utctDay)
 import Data.Yaml (decodeEither', encode)
+import Digest (digestOf)
 import Frontmatter (Kind (..), normalizeFrontmatter, splitFrontmatter)
 import System.Directory (doesFileExist, listDirectory, renameFile)
 import System.Exit (exitFailure)
@@ -59,28 +60,26 @@ runDraft dir slug = case validateSlug slug of
             Right () -> writeSlug dir filename (draftFrontmatter slug)
 
 runPublish :: FilePath -> Text -> IO (Either Text FilePath)
-runPublish dir slug = case validateSlug slug of
-    Left err -> pure (Left err)
-    Right () -> do
-        files <- matches dir slug
-        case files of
-            [] -> pure (Left ("no draft found for '" <> slug <> "' in " <> T.pack dir))
-            [_] -> publishOne dir (head files)
-            _ -> pure (Left ("multiple files match slug '" <> slug <> "': " <> T.intercalate ", " (map T.pack files)))
+runPublish dir digest = do
+    files <- matchesByDigest dir digest
+    case files of
+        [] -> pure (Left ("no draft found for digest '" <> digest <> "' in " <> T.pack dir))
+        [_] -> publishOne dir (head files)
+        _ -> pure (Left ("multiple files share digest '" <> digest <> "': " <> T.intercalate ", " (map T.pack files)))
 
 runRename :: FilePath -> Text -> Text -> IO (Either Text FilePath)
-runRename dir oldSlug newSlug = case validateSlug newSlug of
+runRename dir oldDigest newSlug = case validateSlug newSlug of
     Left err -> pure (Left err)
     Right () -> do
-        files <- matches dir oldSlug
+        files <- matchesByDigest dir oldDigest
         case files of
-            [] -> pure (Left ("no post found for '" <> oldSlug <> "' in " <> T.pack dir))
+            [] -> pure (Left ("no post found for digest '" <> oldDigest <> "' in " <> T.pack dir))
             [_] -> do
                 eFree <- ensureSlugFree dir newSlug
                 case eFree of
                     Left err -> pure (Left err)
                     Right () -> renameOne dir (head files) newSlug
-            _ -> pure (Left ("multiple files match slug '" <> oldSlug <> "': " <> T.intercalate ", " (map T.pack files)))
+            _ -> pure (Left ("multiple files share digest '" <> oldDigest <> "': " <> T.intercalate ", " (map T.pack files)))
 
 {- | Rename a post file only: keep the date prefix, change the slug,
 leave the frontmatter untouched.
@@ -149,6 +148,14 @@ ensureSlugFree dir slug = do
     case dupes of
         [] -> pure (Right ())
         (d : _) -> pure (Left ("a post with slug '" <> slug <> "' already exists (" <> T.pack d <> ")"))
+
+{- | The files in the post directory whose digest matches (their file
+name without the .md extension, hashed).
+-}
+matchesByDigest :: FilePath -> Text -> IO [FilePath]
+matchesByDigest dir digest = do
+    names <- map T.pack <$> listDirectory dir
+    pure [T.unpack n | n <- names, T.isSuffixOf ".md" n, digestOf (T.dropEnd 3 n) == digest]
 
 {- | The files in the post directory whose name is SLUG.md or ends
 with -SLUG.md.

@@ -168,14 +168,15 @@ burogu draft SLUG
 下書きを公開します：日付を追加し、下書きフラグを外します。
 
 ```
-burogu publish SLUG
+burogu publish DIGEST
 ```
 
-`SLUG`  記事スラッグ
+`DIGEST`  記事の digest（format が書く `<!-- digest:
+          xxxxxxxx -->` コメントを参照）
 
 日付は frontmatter の既存の `date:` を優先し、なければ今日を
 使います。`draft: true` は `draft: false` になり、frontmatter は
-正規化されます。ファイル名は変わりません。スラッグが見つから
+正規化されます。ファイル名は変わりません。digest が見つから
 ないか、ファイルが下書きでない場合はエラーになります。
 
 ### rename
@@ -184,11 +185,12 @@ burogu publish SLUG
 そのまま残ります。
 
 ```
-burogu rename 旧slug 新slug
+burogu rename DIGEST 新slug
 ```
 
-`旧slug`  現在の slug
-`新slug`  新しい slug
+`DIGEST`   記事の digest（format が書く `<!-- digest:
+           xxxxxxxx -->` コメントを参照）
+`新slug`   新しい slug
 
 ファイルは `YYYY-MM-DD-新slug.md` になります。digest は名前とともに
 変わるため既存 URL は壊れ、`format` は記事の画像ディレクトリ
