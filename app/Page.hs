@@ -6,7 +6,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import Pandoc (docHasMath, readerOpts, writerOpts)
+import Pandoc (docHasMath, readerOpts, wrapTables, writerOpts)
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.FilePath ((</>))
 import Text.Pandoc.Class (runIO)
@@ -57,7 +57,7 @@ loadPage math path = do
                     case edoc of
                         Left err -> pure (Left (T.pack (show err)))
                         Right doc -> do
-                            ebody <- runIO (writeHtml5String (writerOpts math) doc)
+                            ebody <- runIO (writeHtml5String (writerOpts math) (wrapTables doc))
                             case ebody of
                                 Left err -> pure (Left (T.pack (show err)))
                                 Right body -> case pagePriority doc of

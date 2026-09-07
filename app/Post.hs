@@ -8,7 +8,7 @@ import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
-import Pandoc (docHasMath, readerOpts, writerOpts)
+import Pandoc (docHasMath, readerOpts, wrapTables, writerOpts)
 import System.Directory (listDirectory)
 import System.FilePath (takeFileName, (</>))
 import Text.Pandoc.Class (runIO)
@@ -87,7 +87,7 @@ parsePost math path content = do
             case extractMeta name doc of
                 Left err -> pure (Left err)
                 Right fields -> do
-                    ebody <- runIO (writeHtml5String (writerOpts math) doc)
+                    ebody <- runIO (writeHtml5String (writerOpts math) (wrapTables doc))
                     pure (either (Left . T.pack . show) (Right . mkPost fields (bodyText doc)) ebody)
   where
     name = T.pack (takeFileName path)

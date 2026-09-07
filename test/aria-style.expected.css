@@ -527,16 +527,20 @@ img
   height    : auto;
 }
 
-table
+figure
 {
-  display    : block;
+  max-width : 100%;
+}
+
+.table-scroll
+{
   overflow-x : auto;
   max-width  : 100%;
 }
 
-figure
+table
 {
-  max-width : 100%;
+  width : max-content;
 }
 
 .post-item
@@ -551,6 +555,12 @@ figure
 {
   flex-basis : 100%;
   margin     : 6px 0 0;
+}
+
+.post-item .post-tags
+{
+  flex-basis : 100%;
+  margin-top : 6px;
 }
 
 .post-meta
@@ -820,6 +830,11 @@ nav
 .post-nav-next .post-nav-label
 {
   text-align : left;
+}
+
+.post-list
+{
+  padding-left : 0;
 }
 
 }

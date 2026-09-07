@@ -62,7 +62,7 @@ normalizeFrontmatter kind filename block = do
         toc <- boolOpt "toc" object
         let date = case mDate of
                 Just d -> Just d
-                Nothing -> prefixDate name
+                Nothing -> if draft then Nothing else prefixDate name
         if date == Nothing && not draft
             then Left "no date (neither in frontmatter nor the filename prefix)"
             else

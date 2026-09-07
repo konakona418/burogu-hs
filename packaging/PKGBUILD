@@ -33,7 +33,7 @@ sha256sums=('SKIP')
 
 build() {
     cd "$srcdir/burogu-$pkgver"
-    cabal update
+#    cabal update
     cabal build exe:burogu
 }
 

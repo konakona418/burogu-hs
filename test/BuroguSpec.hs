@@ -74,6 +74,7 @@ tests =
             , draftParsed
             , draftAllowsMissingDate
             , bodyRendered
+            , tableScrollWrap
             , highlightedCode
             , caseVariantWarning
             , noCaseVariantWarning
@@ -216,6 +217,7 @@ tests =
             , i18nPlaceholders
             , i18nPageOutput
             , formatTocKey
+            , formatDraftNoDate
             , tocLevelClasses
             , contentElementStyles
             , searchNoResults
@@ -385,6 +387,18 @@ postNavSingleSide =
         let css = renderCss ariaPreset emptyFonts []
         assertBool "separator" (".post-nav" `textIn` css)
         assertBool "push-right rule" (".post-nav-next" `textIn` css)
+
+formatDraftNoDate :: TestTree
+formatDraftNoDate =
+    testCase "format does not write a date into drafts" $ do
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-draft.md" "title: D\ndraft: true\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _, _) -> do
+                assertBool "no date" ("date:" `notTextIn` fm)
+                assertBool "draft kept" ("draft: true" `textIn` fm)
+        case normalizeFrontmatter PostKind "/tmp/x/2026-08-01-draft.md" "title: D\ndraft: true\ndate: 2026-07-31\n" of
+            Left err -> assertBool ("expected success, got: " <> T.unpack err) False
+            Right (fm, _, _) -> assertBool "explicit date kept" ("date: 2026-07-31" `textIn` fm)
 
 formatTocKey :: TestTree
 formatTocKey =
@@ -658,6 +672,14 @@ bodyRendered =
         assertRight result $ \post -> do
             assertBool "contains h1" ("<h1" `textIn` postBodyHtml post)
             assertBool "contains paragraph" ("Body text" `textIn` postBodyHtml post)
+
+tableScrollWrap :: TestTree
+tableScrollWrap =
+    testCase "tables are wrapped in a scroll container" $ do
+        result <- parsePost plainMath "hello.md" "---\ntitle: Hello\ndate: 2026-07-31\n---\n| a | b |\n|---|---|\n| 1 | 2 |\n"
+        assertRight result $ \post -> do
+            assertBool "table-scroll wrapper" ("<div class=\"table-scroll\">" `textIn` postBodyHtml post)
+            assertBool "contains a table" ("<table" `textIn` postBodyHtml post)
 
 highlightedCode :: TestTree
 highlightedCode =

@@ -149,6 +149,7 @@ stylesheet preset fontTokens =
         , darkTokens (presetTokens preset) (presetDarkTokens preset)
         , baseRules
         , overflowRules
+        , tableScroll
         , listSpacing
         , mobileRules
         , tokenRules
@@ -206,11 +207,17 @@ overflowRules = do
     C.img C.? do
         "max-width" C.-: "100%"
         "height" C.-: "auto"
-    C.table C.? do
-        C.display C.block
+    C.figure C.? ("max-width" C.-: "100%")
+
+{- | A table wrapped in div.table-scroll (see Pandoc.wrapTables) scrolls
+horizontally on narrow screens instead of squashing its columns.
+-}
+tableScroll :: C.Css
+tableScroll = do
+    (".table-scroll" :: C.Selector) C.? do
         "overflow-x" C.-: "auto"
         "max-width" C.-: "100%"
-    C.figure C.? ("max-width" C.-: "100%")
+    C.table C.? ("width" C.-: "max-content")
 
 mobileRules :: C.Css
 mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
@@ -230,6 +237,7 @@ mobileRules = C.query CM.screen [CM.maxWidth (C.px 600)] $ do
     (".post-nav" :: C.Selector) C.? C.flexDirection CF.column
     (".post-nav-next" :: C.Selector) C.? ("margin-left" C.-: "0")
     (".post-nav-next .post-nav-label" :: C.Selector) C.? ("text-align" C.-: "left")
+    (".post-list" :: C.Selector) C.? ("padding-left" C.-: "0")
 
 listSpacing :: C.Css
 listSpacing = do
@@ -241,6 +249,9 @@ listSpacing = do
     (".post-item .post-desc" :: C.Selector) C.? do
         "flex-basis" C.-: "100%"
         "margin" C.-: "6px 0 0"
+    (".post-item .post-tags" :: C.Selector) C.? do
+        "flex-basis" C.-: "100%"
+        "margin-top" C.-: "6px"
     (".post-meta" :: C.Selector) C.? do
         C.display C.flex
         "gap" C.-: "0 var(--space-list-gap)"

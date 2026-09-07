@@ -182,8 +182,8 @@ renderIndex cfg navPages footerLinks cssRef mIndexPage posts = layout cfg navPag
         L.li_ [L.class_ "post-item"] $ do
             L.time_ [L.class_ "post-date"] (L.toHtml (postDate post))
             L.a_ [L.href_ (postUrl post)] (L.toHtml (postTitle post))
-            renderTags (postTags post)
             maybe (pure ()) renderDescription (postDescription post)
+            renderTags (postTags post)
 
 renderPost :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> (Maybe Post, Maybe Post) -> Post -> L.Html ()
 renderPost cfg navPages footerLinks cssRef neighbors post = layout cfg navPages footerLinks cssRef pageMeta $ L.article_ $ do
