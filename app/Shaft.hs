@@ -32,7 +32,7 @@ shaftPreset =
         }
 
 shaftDisplayStack :: [Text]
-shaftDisplayStack = ["Georgia", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", "serif"]
+shaftDisplayStack = ["Georgia", "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", "Noto Sans CJK SC", "serif", "sans-serif"]
 
 shaftBaseTokens :: [(Text, Text)]
 shaftBaseTokens =
@@ -44,9 +44,9 @@ shaftBaseTokens =
     , ("color-code-bg", "#f0ede8")
     , ("color-mark", "#ffd97a")
     , ("color-accent", "#c4000e")
-    , ("font-family", "Georgia, \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Songti SC\", \"SimSun\", serif")
-    , ("font-ja", "\"Hiragino Mincho\", \"Yu Mincho\", \"Noto Serif JP\", \"Noto Serif CJK JP\", serif")
-    , ("font-hant", "\"Songti TC\", \"PMingLiU\", \"Noto Serif TC\", \"Noto Serif CJK TC\", serif")
+    , ("font-family", "Georgia, \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Songti SC\", \"SimSun\", \"Noto Sans CJK SC\", serif, sans-serif")
+    , ("font-ja", "\"Hiragino Mincho\", \"Yu Mincho\", \"Noto Serif JP\", \"Noto Serif CJK JP\", \"Noto Sans CJK JP\", serif, sans-serif")
+    , ("font-hant", "\"Songti TC\", \"PMingLiU\", \"Noto Serif TC\", \"Noto Serif CJK TC\", \"Noto Sans CJK TC\", serif, sans-serif")
     , ("font-size", "17px")
     , ("line-height", "28px")
     , ("content-width", "800px")
@@ -104,13 +104,13 @@ bodyHeadings = do
         "font-family" C.-: "var(--font-display)"
         "font-size" C.-: "calc(var(--font-size) * 1.2)"
         "line-height" C.-: "calc(var(--line-height) * 1.3)"
-        "font-weight" C.-: "600"
+        "font-weight" C.-: "700"
 
 siteName :: C.Css
 siteName =
     (".site-name" :: C.Selector) C.? do
         "font-family" C.-: "var(--font-display)"
-        "font-weight" C.-: "600"
+        "font-weight" C.-: "700"
         "letter-spacing" C.-: "0.02em"
         "color" C.-: "var(--color-accent)"
         C.textDecoration C.none

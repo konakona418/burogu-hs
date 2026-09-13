@@ -1032,7 +1032,7 @@ shaftHarmonyRules =
         assertBool "sharp corners" ("border-radius : 0" `textIn` css)
         assertBool "mobile date column" ("min-width : 0" `textIn` css)
         assertBool "accent site name" ("color           : var(--color-accent)" `textIn` css)
-        assertBool "serif everywhere" ("sans-serif" `notTextIn` css)
+        assertBool "cjk falls back to a bold-capable sans" ("\"Noto Sans CJK SC\", serif, sans-serif" `textIn` css)
         assertBool "print markers" ("::marker" `textIn` css)
         assertBool "ink blockquote" ("blockquote" `textIn` css)
 
@@ -1179,6 +1179,7 @@ serverContentType =
 customPageTitle :: TestTree
 customPageTitle =
     testCase "custom pages read the optional frontmatter title" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test"
         writeFile "/tmp/burogu-test/custom-page-title.md" "---\ntitle: About Me\n---\n# About Me\n\nSome bio.\n"
         result <- loadPage plainMath "/tmp/burogu-test/custom-page-title.md"
         case result of
@@ -1194,6 +1195,7 @@ customPageMissing =
 customPageBody :: TestTree
 customPageBody =
     testCase "custom page bodies are rendered from markdown" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test"
         writeFile "/tmp/burogu-test/custom-page-body.md" "# No title\n\nBody.\n"
         result <- loadPage plainMath "/tmp/burogu-test/custom-page-body.md"
         case result of
@@ -1203,6 +1205,7 @@ customPageBody =
 customPageHasMath :: TestTree
 customPageHasMath =
     testCase "custom pages detect math for script injection" $ do
+        createDirectoryIfMissing True "/tmp/burogu-test"
         writeFile "/tmp/burogu-test/custom-page-math.md" "# Math\n\n$x^2$\n"
         result <- loadPage plainMath "/tmp/burogu-test/custom-page-math.md"
         case result of
