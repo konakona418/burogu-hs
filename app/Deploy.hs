@@ -78,6 +78,7 @@ gitDeploy verbose repo branch name email = do
             runGit verbose cache ["checkout", "-q", "-B", T.unpack branch, "FETCH_HEAD"]
         else runGit verbose cache ["checkout", "-q", "--orphan", T.unpack branch]
     runGit verbose cache ["rm", "-rq", "--ignore-unmatch", "."]
+    runGit verbose cache ["clean", "-fdxq"]
     copyTree "site" cache
     runGit verbose cache ["add", "-A"]
     (code, _, _) <- readCreateProcessWithExitCode (proc "git" ["diff", "--cached", "--quiet"]){cwd = Just cache} ""
