@@ -2105,6 +2105,7 @@ scriptsTests =
     , scriptDataInjected
     , scriptDataBadYaml
     , scriptDataIgnoresOthers
+    , staticSkipsGitignore
     ]
 
 scriptsEvalBasic :: TestTree
@@ -2345,6 +2346,28 @@ scriptDataIgnoresOthers =
             Right _ -> pure ()
         copied <- doesFileExist "/tmp/burogu-test/dataoth-out/notes.txt"
         assertBool "not copied as static" (not copied)
+
+staticSkipsGitignore :: TestTree
+staticSkipsGitignore =
+    testCase "static copying skips .gitignore (top and nested)" $ do
+        removePathForcibly "/tmp/burogu-test/gitignore-src"
+        removePathForcibly "/tmp/burogu-test/gitignore-out"
+        createDirectoryIfMissing True "/tmp/burogu-test/gitignore-src/_post"
+        writeFile "/tmp/burogu-test/gitignore-src/_post/2026-09-07-p.md" "---\ntitle: P\ndate: 2026-09-07\n---\n\nhi\n"
+        createDirectoryIfMissing True "/tmp/burogu-test/gitignore-src/demo/pkg"
+        writeFile "/tmp/burogu-test/gitignore-src/.gitignore" "/site\n"
+        writeFile "/tmp/burogu-test/gitignore-src/demo/.gitignore" "/pkg\n"
+        writeFile "/tmp/burogu-test/gitignore-src/demo/pkg/app.js" "export default 1;\n"
+        result <- try (build Paths{pConfig = "config.yaml", pSrc = "/tmp/burogu-test/gitignore-src", pOut = "/tmp/burogu-test/gitignore-out"} testConfig []) :: IO (Either IOException BuildReport)
+        case result of
+            Left err -> assertBool ("expected success, got " <> show err) False
+            Right _ -> pure ()
+        topGi <- doesFileExist "/tmp/burogu-test/gitignore-out/.gitignore"
+        nestedGi <- doesFileExist "/tmp/burogu-test/gitignore-out/demo/.gitignore"
+        jsCopied <- doesFileExist "/tmp/burogu-test/gitignore-out/demo/pkg/app.js"
+        assertBool "top .gitignore skipped" (not topGi)
+        assertBool "nested .gitignore skipped" (not nestedGi)
+        assertBool "js still copied" jsCopied
 
 footerItemsTest :: TestTree
 footerItemsTest =

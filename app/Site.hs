@@ -295,7 +295,7 @@ writeRobots paths config =
 copyStatic :: Paths -> IO Int
 copyStatic paths = do
     entries <- listDirectory (pSrc paths)
-    let others = filter (`notElem` ["_post", "_pages", "_scripts", "_data"]) entries
+    let others = filter (`notElem` ["_post", "_pages", "_scripts", "_data", ".git", ".gitignore"]) entries
     mapM_ (copyTree (pSrc paths) (pOut paths)) others
     pure (length others)
 
@@ -314,13 +314,15 @@ writeScriptOutputs paths files =
         TIO.writeFile target content
 
 copyTree :: FilePath -> FilePath -> FilePath -> IO ()
-copyTree srcBase dstBase name = do
-    let source = srcBase </> name
-        target = dstBase </> name
-    isDir <- doesDirectoryExist source
-    if isDir
-        then do
-            createDirectoryIfMissing True target
-            children <- listDirectory source
-            mapM_ (copyTree source target) children
-        else copyFile source target
+copyTree srcBase dstBase name
+    | name == ".git" || name == ".gitignore" = pure ()
+    | otherwise = do
+        let source = srcBase </> name
+            target = dstBase </> name
+        isDir <- doesDirectoryExist source
+        if isDir
+            then do
+                createDirectoryIfMissing True target
+                children <- listDirectory source
+                mapM_ (copyTree source target) children
+            else copyFile source target
