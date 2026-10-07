@@ -1,22 +1,23 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Html (PageMeta (..), codeScript, groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix, katexScript) where
+module Html (PageMeta (..), groupByTag, layout, postUrl, render404, renderArchive, renderCustomPage, renderIndex, renderPost, renderRedirect, renderTagArchive, renderTagIndex, tagUrl, tagUrlPrefix) where
 
-import Config (SiteConfig (..), Theme (..))
+import Config (Layout (..), SiteConfig (..))
+import Control.Exception (throw)
 import Control.Monad (when)
 import Data.Char (isSpace)
-import Data.FileEmbed (embedFile)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (decodeUtf8)
+import Data.Text.Lazy qualified as TL
 import I18n (fromSiteLang, t, tWith)
+import Layout (LayoutError (..), configMap, layoutHelpers, navMap, resolveProgram, siteMap)
 import Lucid qualified as L
 import Lucid.Base qualified as LB
 import Page (CustomPage (..))
 import Post (Post (..), TocEntry (..))
-import Text.Pandoc.Options (defaultKaTeXURL, defaultMathJaxURL)
+import Script (Value (..), formatError, initialEnv, renderResult, runProgram)
+import Script.Value (Html (..))
 
 data PageMeta = PageMeta
     { pmTitle :: Text
@@ -26,89 +27,47 @@ data PageMeta = PageMeta
     , pmHasMath :: Bool
     }
 
+{- | Render a page by running the site's layout script: the finished
+page body (raw HTML) is handed to the script, which returns the whole
+document. A runtime error aborts the build.
+-}
 layout :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> PageMeta -> L.Html () -> L.Html ()
 layout cfg navPages footerLinks cssRef meta body =
-    L.doctype_
-        *> L.html_
-            [L.lang_ (siteLang cfg)]
-            ( do
-                L.head_ $ do
-                    L.meta_ [L.charset_ "utf-8"]
-                    L.meta_ [L.name_ "viewport", L.content_ "width=device-width, initial-scale=1, viewport-fit=cover"]
-                    L.meta_ [L.name_ "description", L.content_ (siteDescription cfg)]
-                    L.title_ (L.toHtml (pmTitle meta))
-                    renderOg cfg meta
-                    renderMath cfg meta
-                    renderExtraJs cfg
-                    L.script_ (themeScript :: Text)
-                    L.script_ (codeScript :: Text)
-                    L.link_ [L.rel_ "stylesheet", L.href_ cssRef]
-                L.body_ $ do
-                    L.header_ [L.class_ "site-header"] $ L.nav_ $ do
-                        L.a_ [L.class_ "site-name", L.href_ "/"] (L.toHtml (siteName cfg))
-                        mapM_ renderNavPage navPages
-                    L.main_ body
-                    L.footer_ [L.class_ "site-footer"] $ do
-                        L.nav_ [L.class_ "footer-links"] $ renderFooterLinks (siteFooterSeparator cfg) footerLinks
-                        L.p_ $ do
-                            L.toHtml (siteCopyright cfg)
-                            maybe (pure ()) renderCredit (siteGeneratedBy cfg)
-                        L.button_ [L.class_ "theme-toggle", L.type_ "button", LB.makeAttribute "aria-label" (t (fromSiteLang (siteLang cfg)) "themeToggle")] mempty
-            )
+    case applyLayout cfg navPages footerLinks cssRef meta (TL.toStrict (L.renderText body)) of
+        Left errs -> throw (LayoutError errs)
+        Right doc -> L.toHtmlRaw doc
+
+applyLayout :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> PageMeta -> Text -> Either [Text] Text
+applyLayout cfg navPages footerLinks cssRef meta bodyHtml = do
+    (value, _) <- either (Left . pure . formatError) Right (runProgram env program)
+    either (Left . pure) Right (renderResult value)
   where
-    renderCredit :: Text -> L.Html ()
-    renderCredit credit = L.toHtml (" · " :: Text) >> L.toHtml credit
+    program = resolveProgram cfg (layProgram (siteLayout cfg))
+    env =
+        Map.unions
+            [ Map.fromList
+                [ ("site", siteMap cfg)
+                , ("nav-links", navMap navPages)
+                , ("footer-links", navMap footerLinks)
+                , ("page", pageMetaMap meta)
+                , ("content", VHtml (HRaw bodyHtml))
+                , ("cssRef", VStr cssRef)
+                , ("config", configMap cfg)
+                ]
+            , layGlobals (siteLayout cfg)
+            , Map.fromList (layoutHelpers cfg)
+            , initialEnv
+            ]
 
-    renderFooterLinks :: Text -> [(Text, Text)] -> L.Html ()
-    renderFooterLinks _ [] = pure ()
-    renderFooterLinks _ [(label, href)] = L.a_ [L.href_ href] (L.toHtml label)
-    renderFooterLinks separator ((label, href) : rest) = do
-        L.a_ [L.href_ href] (L.toHtml label)
-        L.toHtml separator
-        renderFooterLinks separator rest
-
-renderOg :: SiteConfig -> PageMeta -> L.Html ()
-renderOg cfg meta = do
-    L.meta_ [LB.makeAttribute "property" "og:title", L.content_ (pmTitle meta)]
-    L.meta_ [LB.makeAttribute "property" "og:type", L.content_ (pmOgType meta)]
-    L.meta_ [LB.makeAttribute "property" "og:site_name", L.content_ (siteName cfg)]
-    L.meta_ [LB.makeAttribute "property" "og:description", L.content_ (fromMaybe (siteDescription cfg) (pmOgDescription meta))]
-    maybe (pure ()) renderOgUrl (siteBaseUrl cfg)
-  where
-    renderOgUrl :: Text -> L.Html ()
-    renderOgUrl baseUrl = L.meta_ [LB.makeAttribute "property" "og:url", L.content_ (baseUrl <> pmOgPath meta)]
-
-renderMath :: SiteConfig -> PageMeta -> L.Html ()
-renderMath cfg meta =
-    case (themeMath theme, pmHasMath meta) of
-        ("mathjax", True) ->
-            L.script_ [L.defer_ "", L.src_ (fromMaybe defaultMathJaxURL (themeMathUrl theme)), L.type_ "text/javascript"] (pure () :: L.Html ())
-        ("katex", True) -> do
-            L.link_ [L.rel_ "stylesheet", L.href_ (katexBase <> "katex.min.css")]
-            L.script_ [L.defer_ "", L.src_ (katexBase <> "katex.min.js")] (pure () :: L.Html ())
-            L.script_ (katexScript :: Text)
-        _ -> pure ()
-  where
-    theme = siteTheme cfg
-    katexBase = fromMaybe defaultKaTeXURL (themeMathUrl theme)
-
-renderExtraJs :: SiteConfig -> L.Html ()
-renderExtraJs cfg = mapM_ scriptTag (themeExtraJs (siteTheme cfg))
-  where
-    scriptTag :: Text -> L.Html ()
-    scriptTag file = L.script_ [L.defer_ "", L.src_ ("/" <> file)] (pure () :: L.Html ())
-
-katexScript :: Text
-katexScript = decodeUtf8 $(embedFile "js/katex.js")
-
-themeScript :: Text
-themeScript = decodeUtf8 $(embedFile "js/theme.js")
-
-codeScript :: Text
-codeScript = decodeUtf8 $(embedFile "js/code.js")
-
-renderNavPage :: (Text, Text) -> L.Html ()
-renderNavPage (label, href) = L.a_ [L.href_ href] (L.toHtml label)
+pageMetaMap :: PageMeta -> Value
+pageMetaMap meta =
+    VMap $
+        [ ("title", VStr (pmTitle meta))
+        , ("ogType", VStr (pmOgType meta))
+        , ("ogPath", VStr (pmOgPath meta))
+        , ("hasMath", VBool (pmHasMath meta))
+        ]
+            <> maybe [] (\d -> [("ogDescription", VStr d)]) (pmOgDescription meta)
 
 renderCustomPage :: SiteConfig -> [(Text, Text)] -> [(Text, Text)] -> Text -> PageMeta -> CustomPage -> L.Html ()
 renderCustomPage cfg navPages footerLinks cssRef meta page = layout cfg navPages footerLinks cssRef meta $ L.div_ [L.class_ "post-body"] (L.toHtmlRaw (cpBodyHtml page))

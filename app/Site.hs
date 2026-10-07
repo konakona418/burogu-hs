@@ -1,8 +1,8 @@
 module Site (BuildReport (..), build) where
 
 import Cli (Paths (..))
-import Config (SiteConfig (..), Theme (..))
-import Control.Exception (IOException, catch, throwIO)
+import Config (Layout (..), SiteConfig (..), Theme (..))
+import Control.Exception (IOException, SomeException, catch, fromException, throwIO)
 import Css (FontFile (..), Fonts (..), renderCss)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import Data.Text (Text)
@@ -13,6 +13,7 @@ import Digest (fnv1a)
 
 import Feed (renderAtom)
 import Html qualified as H
+import Layout (LayoutError (..), buildModelGlobals, loadLayoutProgram)
 import Lucid qualified as L
 import Page (CustomPage (..), loadPages)
 import Post (Post (..), mathMethod)
@@ -46,12 +47,16 @@ data BuildReport = BuildReport
 build :: Paths -> SiteConfig -> [Post] -> IO BuildReport
 build paths config posts = do
     report <-
-        buildWork paths config posts `catch` \(e :: IOException) ->
-            if isUserError e
-                then throwIO e
-                else do
+        buildWork paths config posts `catch` \(e :: SomeException) ->
+            case fromException e :: Maybe LayoutError of
+                Just _ -> do
                     removePathForcibly (pOut paths)
                     throwIO e
+                Nothing -> case fromException e :: Maybe IOException of
+                    Just ioe | isUserError ioe -> throwIO ioe
+                    _ -> do
+                        removePathForcibly (pOut paths)
+                        throwIO e
     pure report
 
 buildWork :: Paths -> SiteConfig -> [Post] -> IO BuildReport
@@ -83,22 +88,24 @@ buildWork paths config posts = do
                         Left errs -> ioError (userError (T.unpack (T.unlines (("_pages: " <>) <$> errs))))
                         Right sp -> do
                             let footer = footerItems sp
+                            elayout <- loadLayoutProgram paths config
+                            let config' = config{siteLayout = Layout elayout (buildModelGlobals posts pages'' dataEnv)}
                             removePathForcibly (pOut paths)
                             createDirectoryIfMissing True (pOut paths)
-                            css <- renderStyleCss paths config
+                            css <- renderStyleCss paths config'
                             let cssRef = cssHref css
-                            TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config nav footer cssRef (snd <$> spIndex sp) posts)))
-                            write404 paths config nav footer cssRef (sp404 sp)
-                            writePages paths config nav footer cssRef (spNormal sp)
-                            writeRedirects paths config cssRef (specialPages sp <> spRedirects sp)
+                            TIO.writeFile (pOut paths </> "index.html") (TL.toStrict (L.renderText (H.renderIndex config' nav footer cssRef (snd <$> spIndex sp) posts)))
+                            write404 paths config' nav footer cssRef (sp404 sp)
+                            writePages paths config' nav footer cssRef (spNormal sp)
+                            writeRedirects paths config' cssRef (specialPages sp <> spRedirects sp)
                             writeStyleSheet paths css
-                            mapM_ (writePost paths config nav footer cssRef posts) posts
-                            writeTagPages paths config nav footer cssRef (spTags sp) posts
-                            writeArchive paths config nav footer cssRef (spArchive sp) posts
-                            writeSearch paths config nav footer cssRef sp posts
-                            writeRobots paths config
-                            brFeed <- writeFeed paths config posts
-                            brSitemap <- writeSitemap paths config posts nav (isJust (spTags sp))
+                            mapM_ (writePost paths config' nav footer cssRef posts) posts
+                            writeTagPages paths config' nav footer cssRef (spTags sp) posts
+                            writeArchive paths config' nav footer cssRef (spArchive sp) posts
+                            writeSearch paths config' nav footer cssRef sp posts
+                            writeRobots paths config'
+                            brFeed <- writeFeed paths config' posts
+                            brSitemap <- writeSitemap paths config' posts nav (isJust (spTags sp))
                             nStatic <- copyStatic paths
                             writeScriptOutputs paths scriptFiles
                             pure BuildReport{brStaticFiles = nStatic, brTagPages = length (H.groupByTag posts), brFeed = brFeed, brSitemap = brSitemap, brScriptFiles = length scriptFiles}

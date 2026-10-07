@@ -169,6 +169,7 @@ configValues raw =
             Just u | not (T.null u) -> Just u
             _ -> Nothing
         , cvExtraJs = fmap (inlineList . map scalar) (rawExtraJs t)
+        , cvLayout = rawLayout t
         , cvFonts = fmap fontsValues (rawFonts t)
         , cvFontsFiles = fmap renderFontFiles (fontsFiles (fromMaybe emptyFonts (rawFonts t)))
         }

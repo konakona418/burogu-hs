@@ -30,6 +30,8 @@ data ConfigTemplate = ConfigTemplate
     , ctMathUrl :: TemplateLine
     , ctExtraJsComment :: Text
     , ctExtraJs :: TemplateLine
+    , ctLayoutComment :: Text
+    , ctLayout :: TemplateLine
     , ctFontsComment :: Text
     , ctFonts :: [TemplateLine]
     }
@@ -46,12 +48,13 @@ data ConfigValues = ConfigValues
     , cvTheme :: [(Text, Text)]
     , cvMathUrl :: Maybe Text
     , cvExtraJs :: Maybe Text
+    , cvLayout :: Maybe Text
     , cvFonts :: Maybe [(Text, Text)]
     , cvFontsFiles :: Maybe Text
     }
 
 emptyConfigValues :: ConfigValues
-emptyConfigValues = ConfigValues{cvTop = [], cvDeploy = Nothing, cvSrcRepo = Nothing, cvTheme = [], cvMathUrl = Nothing, cvExtraJs = Nothing, cvFonts = Nothing, cvFontsFiles = Nothing}
+emptyConfigValues = ConfigValues{cvTop = [], cvDeploy = Nothing, cvSrcRepo = Nothing, cvTheme = [], cvMathUrl = Nothing, cvExtraJs = Nothing, cvLayout = Nothing, cvFonts = Nothing, cvFontsFiles = Nothing}
 
 defaultConfigTemplate :: ConfigTemplate
 defaultConfigTemplate =
@@ -93,6 +96,8 @@ defaultConfigTemplate =
         , ctMathUrl = TemplateLine "mathUrl" "" (Just "# optional: override the CDN URL")
         , ctExtraJsComment = T.unlines ["  # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page"]
         , ctExtraJs = TemplateLine "extraJs" "" (Just "# optional: JS files under src/ loaded on every page")
+        , ctLayoutComment = T.unlines ["  # layout: layout.d  # optional: a script under src/ that renders the whole page shell"]
+        , ctLayout = TemplateLine "layout" "" (Just "# optional: a script under src/ that renders the whole page shell")
         , ctFontsComment =
             T.unlines
                 [ "  # fonts:               # optional: override the preset's font styles"
@@ -128,6 +133,7 @@ renderConfig tpl values = T.unlines (concat blocks)
         , srcRepoBlock
         , "theme:" : themeLines
         , extraJsBlock
+        , layoutBlock
         , fontsBlock
         ]
 
@@ -170,6 +176,11 @@ renderConfig tpl values = T.unlines (concat blocks)
     extraJsBlock = case cvExtraJs values of
         Nothing -> T.lines (ctExtraJsComment tpl)
         Just v -> [renderLine "  " [(tlKey (ctExtraJs tpl), v)] (ctExtraJs tpl)]
+
+    layoutBlock :: [Text]
+    layoutBlock = case cvLayout values of
+        Nothing -> T.lines (ctLayoutComment tpl)
+        Just v -> [renderLine "  " [(tlKey (ctLayout tpl), v)] (ctLayout tpl)]
 
     fontsBlock :: [Text]
     fontsBlock = case cvFonts values of

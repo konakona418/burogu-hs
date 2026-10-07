@@ -2,10 +2,12 @@ module Build (runBuild) where
 
 import Cli (Paths (..))
 import Config (SiteConfig (..), Theme (..), loadConfig)
-import Control.Exception (IOException, catch)
+import Control.Exception (IOException, SomeException, catch, fromException, throwIO)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Layout (LayoutError (..))
 import Post (loadPosts, mathMethod, warnCaseTags)
+import Script (resetGensym)
 import Site (BuildReport (..), build)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
@@ -14,6 +16,7 @@ import System.IO.Error (isUserError)
 
 runBuild :: Paths -> IO ()
 runBuild paths = do
+    resetGensym
     config <- loadConfig (pConfig paths)
     let math = mathMethod (themeMath (siteTheme config)) (themeMathUrl (siteTheme config))
     eposts <- loadPosts math (pSrc paths </> "_post") `catch` \(e :: IOException) -> pure (Left [T.pack (show e)])
@@ -25,11 +28,18 @@ runBuild paths = do
             exitFailure
         Right posts -> do
             mapM_ (TIO.hPutStrLn stderr . ("warning: " <>)) (warnCaseTags posts)
-            ereport <- (Right <$> build paths config posts) `catch` \(e :: IOException) -> pure (Left e)
-            case ereport of
-                Left e -> do
-                    TIO.hPutStrLn stderr ("Build failed: " <> T.pack (show e))
-                    if isUserError e
+            result <-
+                (Right <$> build paths config posts)
+                    `catch` \(e :: SomeException) ->
+                        case fromException e :: Maybe LayoutError of
+                            Just (LayoutError msgs) -> pure (Left ("layout script:\n" <> T.unlines (("  - " <>) <$> msgs), False))
+                            Nothing -> case fromException e :: Maybe IOException of
+                                Just ioe -> pure (Left (T.pack (show ioe), isUserError ioe))
+                                Nothing -> throwIO e
+            case result of
+                Left (message, userError') -> do
+                    TIO.hPutStrLn stderr ("Build failed: " <> message)
+                    if userError'
                         then TIO.hPutStrLn stderr "Nothing was written: the existing output directory was left untouched."
                         else TIO.hPutStrLn stderr "The output directory was removed; nothing is left to deploy."
                     exitFailure

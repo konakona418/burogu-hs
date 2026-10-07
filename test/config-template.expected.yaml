@@ -19,6 +19,7 @@ theme:
   extraCss: [theme.css]
   # mathUrl: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js  # optional: override the CDN URL (defaults to the CDN of theme.math)
   # extraJs: [theme.js]  # optional: JS files under src/ loaded on every page
+  # layout: layout.d  # optional: a script under src/ that renders the whole page shell
   # fonts:               # optional: override the preset's font styles
   #   body: ["Helvetica Neue", "PingFang SC", sans-serif]
   #   display: [Georgia, "Noto Serif CJK SC", "Songti SC", SimSun, serif]

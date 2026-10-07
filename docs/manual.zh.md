@@ -416,104 +416,129 @@ footer 页面直链目标。旧 `hiddenInNavbar` 键在构建时被拒绝；
 
 ### Scripts 脚本
 
-页面可以用脚本生成，替代 markdown。在 frontmatter 里加 `script:`
-字段；该文件（相对 `src/_scripts/`）在构建时求值，其字符串结果
-就是页面正文（raw HTML）。markdown 正文被忽略。
+脚本用一种小型 Lisp（S 表达式）方言编写，可以替代页面正文，或生成
+一个站点文件。在页面 frontmatter 中加入 `script:` 字段；该文件（相对
+`src/_scripts/`）在构建时求值，其结果成为页面正文（raw HTML）。
+markdown 正文被忽略。
 
 `script`   脚本文件，位于 `src/_scripts/`，如 `hello.d`
-`output`   站点根目录内的相对路径：脚本结果写入该文件，不再生
-           成页面（如 `data.json`）；页面本体不渲染、不进导航。
-           需要 `script`；不能与 `redirectAs` 组合；路径重复是错误
+`output`   站点根目录内的相对路径：脚本结果写入该文件，而不是生成
+           页面（如 `data.json`）；页面本体不渲染，也不进导航。需要
+           `script`；不能与 `redirectAs` 组合；路径重复是错误
 
-脚本求值时注入站点上下文：
+脚本运行时绑定站点上下文：
 
-`site`     站点配置：siteName、siteAuthor、siteDescription、
-           siteLang、siteCopyright、baseUrl、siteGeneratedBy
-`posts`    全部文章：title、date、tags、url、draft、text、
-           description
-`pages`    自定义页面：slug、url、title、redirectAs
-`tags`     全部标签及其文章数：name、count
-`config`   原始配置：theme（preset、math、mathUrl、extraCss、
-           extraJs）、srcRepo
-`data`     用户数据文件：`src/_data/` 下每个 YAML 文件（文件名去
-           `.yaml` → 内容）；其他扩展名被忽略
+`site`       站点配置：siteName、siteAuthor、siteDescription、
+             siteLang、siteCopyright、baseUrl、siteGeneratedBy、
+             footerSeparator
+`nav-links`  导航：每个条目都有 label 与 href
+`posts`      全部文章：title、date、tags、url、draft、text、
+             description
+`pages`      自定义页面：slug、url、title、redirectAs
+`tags`       全部标签及其文章数：name、count
+`config`     原始配置：theme（preset、math、mathUrl、extraCss、
+             extraJs）、srcRepo
+`data`       用户数据文件：`src/_data/` 下每个 YAML 文件（文件名去
+             `.yaml` → 解析后的内容）；其他扩展名被忽略
 
-脚本产出一个字符串；去向由页面声明决定：只有 `script:` 时填入
-页面正文（套用常规 layout）；`script:` + `output:` 时写入站点
-指定路径（无 layout）。输出文件最后写入，因此脚本可以覆盖生成器
-或静态文件写出的任何内容——包括 `index.html`（完全自定义首页）
+脚本的结果会渲染为 HTML：元素会渲染，字符串原样通过，数字与布尔值
+变成文本，nil 变成空，数组则是拼接后的片段。去向由页面声明决定：
+单独的 `script:` 填入页面正文（在 layout 内渲染），`script:` +
+`output:` 把结果写入指定的站点路径（无 layout）。输出文件最后写入，
+因此脚本可以覆盖生成器或静态文件写出的任何内容——包括 `index.html`
 和文章页。
 
-`puts(...)` 在构建时把参数打印到 stderr。脚本的任何错误（语法或
-运行时）都像其他页面错误一样使构建失败，输出目录保持不变。
+`(puts ...)` 在构建时把参数打印到 stderr。脚本的任何错误（读取或
+运行时）都像其他页面错误一样使构建失败；输出目录保持不变。
 
 #### 脚本语言
 
-一门微型 Ruby 风格、动态类型、纯计算的语言。函数调用只有一种
-写法：`f(a, b)`；单独的 `f` 只是函数值。一切皆表达式；程序、
-`def` 体和 lambda 体都是相邻表达式序列，序列的值是最后一个。
+一门微型 Lisp：S 表达式、动态类型、无赋值。列表是 `( ... )`，数组
+字面量是 `[ ... ]`，映射字面量是 `{ key value ... }`（`:class` 之类
+的关键字读作字符串），quote 是 `'form`，quasiquote 是 `` `form ``，
+配合 `,form`（unquote）与 `,@form`（unquote-splicing），`;` 开始行
+注释。`{ ... }` 中属性的顺序在渲染后的 HTML 中会保留。程序是一串
+form；最后一个 form 的值就是结果。
 
-字面量：`42`、`1.5`、`"text #{expr}"`（插值，可嵌套字符串）、
-`true`、`false`、`nil`、`[1, 2]`、`{"a" => 1}`。lambda：
-`{ x, y -> expr ... }`。定义：`def f(a, b) expr ... end`
-（顶层 `def` 互相可见，与顺序无关）。条件：`if cond then expr
-else expr end`（`else` 分支可省）。运算符：`+ - * / % == != <
-> <= >= && || !`、一元负号。只有 `false` 和 `nil` 为假。没有
-循环也没有赋值；用递归和 `map`/`filter`。
+特殊形式：
+
+    (def name value)          bind a top-level value
+    (defn name (a b) body…)   bind a function (top level; mutually recursive)
+    (defmacro name (a b) body…)  bind a macro (top level)
+    (fn (a b) body…)          an anonymous function
+    (if cond then else?)      conditional (else optional)
+    (let (x 1 y 2) body…)     sequential local bindings
+    (do e1 e2 …)              evaluate in order, value of the last
+    (and …) (or …)            short-circuit
+    (quote form)              the form as data
+
+只有 `false` 和 `nil` 为假。`def`/`defn` 仅限顶层；函数内部用 `let`。
+没有循环；用递归和 `map`/`filter`。深度递归的调用会以 “recursion
+limit exceeded” 错误停止，而不是崩溃。
+
+宏接收的参数是**未求值**的（作为数据），并返回展开结果（同样是
+数据），之后才对其求值。宏是非卫生的（non-hygienic）：临时名称用
+`(gensym)`（可选 `(gensym "prefix")`）来避免捕获用户变量。用
+quasiquote 构造宏的结果：
+
+    (defmacro unless (c body) `(if ,c nil ,body))
 
 内置函数：
 
-    len(x)          字符串/数组/映射的长度
-    at(x, i)        数组或字符串下标 i 的元素
-    get(m, k)       映射中键 k 的值（缺失返回 nil）
-    append(a, v)    数组 a 追加 v 的副本
-    concat(a, b)    数组或字符串拼接
-    join(a, sep)    数组拼成字符串
-    split(s, sep)   字符串按分隔符拆成数组
-    map(a, f)       对每个元素应用 f 的数组
-    filter(a, f)    f 为真的元素组成的数组
-    sort(a)         数字或字符串数组排序
-    reverse(a)      反转数组
-    first(a)        第一个元素（空返回 nil）
-    last(a)         最后一个元素（空返回 nil）
-    keys(m)         映射的键
-    values(m)       映射的值
-    contains(a, x)  子串或元素包含判断
-    trim(s)         去掉首尾空白的字符串
-    lower(s)        小写字符串
-    upper(s)        大写字符串
-    replace(s, f, t) 字符串中 f 替换为 t
-    take(a, n)      前 n 个元素（或字符）
-    drop(a, n)      去掉前 n 个元素（或字符）
-    toStr(v)        数字/布尔/nil/字符串转字符串
-    toJson(v)       值转 pretty JSON（nil 变 null）
-    formatDate(d, f)  strftime 风格日期格式化（ISO 日期）
+    (+ a b …) (- a b …) (* a b …) (/ a b …) (% a b)
+    (== a b) (!= a b) (< a b) (> a b) (<= a b) (>= a b) (not x)
+    (len x) (at x i) (get m k) (append a v) (concat a b)
+    (join a sep) (split s sep) (map a f) (filter a f) (reduce a f init)
+    (sort a) (reverse a) (first a) (last a) (keys m) (values m)
+    (contains a x) (trim s) (lower s) (upper s) (replace s f t)
+    (take a n) (drop a n) (str x …) (to-json v)
+    (format-date d f)   strftime-style date formatting (ISO date)
+    (gensym prefix?)    a fresh symbol for macros
 
-指令：%Y %y %m %d %b %B %a %A %%；%-m/%-d 去补零；未知指令报错。
-例：formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
-    formatDate(d, f)  strftime 风格日期格式化（ISO 日期）
+`format-date` 的指令：`%Y %y %m %d %b %B %a %A %%`；`%-m`/`%-d` 去
+补零；未知指令报错。
+例：`(format-date date "%Y年%-m月%-d日")` -> `2026年8月2日`。
 
-HTML helper（内容原样插入；文本用 `esc` 转义）：
-    el(name, attrs, content)  任意 tag；attrs：true=裸属性名，
-                              false/nil=省略，键值转义
-    esc(s)                    转义 & < > " '
-    h1 h2 p div span strong em time ul ol li  仅内容 tag
-    a(content, href)          href 转义的链接
-    img(src, alt)             空元素图片；alt 传 nil 省略
-    空元素（br、hr、img、input、meta、link、source）不输出闭合标签。
-    puts(...)       打印参数到 stderr（返回 nil）
+HTML 是一等值。每个 tag 都是函数：
+
+    (div attrs child …)     an element; attrs is a map (or nil/omitted)
+    (el name attrs child…)  any tag by name
+    (raw html)              insert a string without escaping
+
+属性值 `true` 渲染为裸属性，`false` 和 `nil` 省略它，其余值转义渲染。
+文本子节点会转义；`raw` 插入受信任的 HTML。空元素（br、hr、img、
+input、meta、link、source）没有闭合标签。
 
 #### 示例
 
-    # src/_scripts/hello.d
-    "<h2>Hello #{get(site, "siteName")}!</h2>"
-      + join(map(posts, { p -> "<li>" + get(p, "title") + "</li>" }), "")
+    ; src/_scripts/hello.d
+    (defmacro labeled (label value) `(li (str ,label ": " ,value)))
+    (ul
+      (map posts
+        (fn (post) (labeled "post" (get post "title")))))
 
-    # src/_pages/hello.md
+    ; src/_pages/hello.md
     ---
     title: Hello
     script: hello.d
     ---
+
+#### 页面外壳
+
+整个 `<html>` 文档由 layout 脚本产生；完成的页面正文作为 `content`
+交给它。每个预设自带一套外壳。要分叉它，把它复制到 `src/` 下，
+并让 `theme.layout` 指向你的副本：
+
+    theme:
+      layout: layout.d
+
+layout 脚本会为每个 HTML 页面运行，除了上面的脚本上下文外还有这些
+绑定：`content`（完成的正文，raw HTML）、`page`（title、ogType、
+ogPath、ogDescription、hasMath）、`nav-links`、`footer-links`、
+`cssRef`，以及辅助函数 `og-tags`、`math-tags`、`theme-js`、`code-js`
+和 `t`（i18n 查找）。预设外壳位于 burogu 源码的
+`app/templates/aria.d` 和 `app/templates/shaft.d`；`theme.layout`
+会覆盖该预设本会使用的那一份。
 
 ### 静态文件与内置产物
 

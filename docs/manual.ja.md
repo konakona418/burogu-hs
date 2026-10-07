@@ -471,10 +471,11 @@ site/                生成出力（生成のたびに作り直される）
 
 ### Scripts スクリプト
 
-ページは markdown の代わりにスクリプトで生成できます。frontmatter
-に `script:` フィールドを追加します。そのファイル（`src/_scripts/`
-からの相対パス）はビルド時に評価され、文字列の結果がページ本文
-（raw HTML）になります。markdown 本文は無視されます。
+スクリプトは小さな Lisp（S 式）方言で書かれ、ページ本文を置き換え
+たり、サイトファイルを生成したりできます。ページの frontmatter に
+`script:` フィールドを追加します。そのファイル（`src/_scripts/` から
+の相対パス）はビルド時に評価され、その結果がページ本文（raw HTML）
+になります。markdown 本文は無視されます。
 
 `script`   スクリプトファイル（`src/_scripts/` 配下）、例: `hello.d`
 `output`   サイトルート内の相対パス: スクリプト結果はページの代わりに
@@ -484,99 +485,127 @@ site/                生成出力（生成のたびに作り直される）
 
 スクリプトはサイトコンテキストを束縛した状態で実行されます:
 
-`site`     サイト設定: siteName、siteAuthor、siteDescription、
-           siteLang、siteCopyright、baseUrl、siteGeneratedBy
-`posts`    全記事: title、date、tags、url、draft、text、
-           description
-`pages`    カスタムページ: slug、url、title、redirectAs
-`tags`     全タグと投稿数: name、count
-`config`   生の設定: theme（preset、math、mathUrl、extraCss、
-           extraJs）、srcRepo
-`data`     ユーザーデータファイル: `src/_data/` の各 YAML ファイル
-           （拡張子 `.yaml` を除いたファイル名 → 内容）。他の拡張子
-           は無視されます
+`site`       サイト設定: siteName、siteAuthor、siteDescription、
+             siteLang、siteCopyright、baseUrl、siteGeneratedBy、
+             footerSeparator
+`nav-links`  ナビゲーション: 各エントリは label と href を持ちます
+`posts`      全記事: title、date、tags、url、draft、text、
+             description
+`pages`      カスタムページ: slug、url、title、redirectAs
+`tags`       全タグと投稿数: name、count
+`config`     生の設定: theme（preset、math、mathUrl、extraCss、
+             extraJs）、srcRepo
+`data`       ユーザーデータファイル: `src/_data/` の各 YAML ファイル
+             （拡張子 `.yaml` を除いたファイル名 → 解析済みの内容）。
+             他の拡張子は無視されます
 
-スクリプトは文字列を生成します。その行き先はページ宣言で決まり
-ます: `script:` だけならページ本文（通常のレイアウト内）、
-`script:` + `output:` なら指定したサイトパスへ書き出します
-（レイアウトなし）。出力ファイルは最後に書き込まれるため、
-ジェネレーターや静的ファイルが書いた任意のものを上書きできます
-——`index.html`（完全にカスタムなホームページ）や記事ページも
-含みます。
+スクリプトの結果は HTML にレンダリングされます: 要素はレンダリング
+され、文字列はそのまま通され、数値と真偽値はテキストになり、nil は
+空になり、配列は連結されたフラグメントになります。行き先はページ
+宣言で決まります: `script:` だけならページ本文（レイアウト内に
+レンダリング）、`script:` + `output:` なら結果を指定したサイトパスへ
+書き出します（レイアウトなし）。出力ファイルは最後に書き込まれる
+ため、スクリプトはジェネレーターや静的ファイルが書いた任意のものを
+上書きできます——`index.html` や記事ページも含みます。
 
-`puts(...)` はビルド中に引数を stderr へ出力します。スクリプトの
-エラー（構文・実行時）は他のページエラーと同様にビルドを失敗させ、
-出力ディレクトリは変更されません。
+`(puts ...)` はビルド中に引数を stderr へ出力します。スクリプトの
+エラー（読み込み・実行時）は他のページエラーと同様にビルドを失敗
+させ、出力ディレクトリは変更されません。
 
 #### スクリプト言語
 
-小さな Ruby 風、動的型付け、純計算の言語です。関数呼び出しは
-`f(a, b)` の一通りだけです。単独の `f` は関数値そのものです。
-すべてが式であり、プログラム・`def` 本体・ラムダ本体は隣接する
-式の列で、値は最後の式です。
+小さな Lisp: S 式、動的型付け、代入なし。リストは `( ... )`、配列
+リテラルは `[ ... ]`、マップリテラルは `{ key value ... }`（`:class`
+のようなキーワードは文字列として読まれます）、quote は `'form`、
+quasiquote は `` `form ``、`,form`（unquote）と `,@form`
+（unquote-splicing）、`;` は行コメントを開始します。`{ ... }` 内の
+属性の順序はレンダリング後の HTML に保持されます。プログラムは form
+の列で、最後の form の値が結果です。
 
-リテラル: `42`、`1.5`、`"text #{expr}"`（補間、ネスト可）、
-`true`、`false`、`nil`、`[1, 2]`、`{"a" => 1}`。ラムダ:
-`{ x, y -> expr ... }`。定義: `def f(a, b) expr ... end`
-（トップレベルの `def` は順序に関係なく相互参照できます）。
-条件: `if cond then expr else expr end`（`else` は省略可）。
-演算子: `+ - * / % == != < > <= >= && || !`、単項マイナス。
-偽になるのは `false` と `nil` だけです。ループも代入もありません。
-再帰と `map`/`filter` を使います。
+特殊形式:
+
+    (def name value)          bind a top-level value
+    (defn name (a b) body…)   bind a function (top level; mutually recursive)
+    (defmacro name (a b) body…)  bind a macro (top level)
+    (fn (a b) body…)          an anonymous function
+    (if cond then else?)      conditional (else optional)
+    (let (x 1 y 2) body…)     sequential local bindings
+    (do e1 e2 …)              evaluate in order, value of the last
+    (and …) (or …)            short-circuit
+    (quote form)              the form as data
+
+偽になるのは `false` と `nil` だけです。`def`/`defn` はトップレベル
+のみ。関数内では `let` を使います。ループはありません。再帰と
+`map`/`filter` を使います。深い再帰呼び出しはクラッシュせず
+“recursion limit exceeded” エラーで停止します。
+
+マクロは引数を**未評価**のまま（データとして）受け取り、展開結果
+（これもデータ）を返します。その展開結果がその後評価されます。
+マクロは非衛生的（non-hygienic）です: ユーザー変数を捕捉してはなら
+ない一時名には `(gensym)`（任意で `(gensym "prefix")`）を使います。
+マクロの結果は quasiquote で組み立てます:
+
+    (defmacro unless (c body) `(if ,c nil ,body))
 
 組み込み関数:
 
-    len(x)          文字列・配列・マップの長さ
-    at(x, i)        配列・文字列のインデックス i の要素
-    get(m, k)       マップのキー k の値（無ければ nil）
-    append(a, v)    配列 a に v を追加したコピー
-    concat(a, b)    配列・文字列の連結
-    join(a, sep)    配列を文字列に結合
-    split(s, sep)   文字列を区切り文字で分割
-    map(a, f)       各要素に f を適用した配列
-    filter(a, f)    f が真の要素だけの配列
-    sort(a)         数値・文字列の配列をソート
-    reverse(a)      配列を反転
-    first(a)        最初の要素（空なら nil）
-    last(a)         最後の要素（空なら nil）
-    keys(m)         マップのキー
-    values(m)       マップの値
-    contains(a, x)  部分文字列・要素の包含判定
-    trim(s)         前後の空白を除いた文字列
-    lower(s)        小文字の文字列
-    upper(s)        大文字の文字列
-    replace(s, f, t) 文字列中の f を t に置換
-    take(a, n)      先頭 n 個の要素（または文字）
-    drop(a, n)      先頭 n 個を除いた要素（または文字）
-    toStr(v)        数値・真偽値・nil・文字列を文字列化
-    toJson(v)       値を pretty JSON に（nil は null）
-    formatDate(d, f)  strftime 風の日付フォーマット（ISO 日付）
+    (+ a b …) (- a b …) (* a b …) (/ a b …) (% a b)
+    (== a b) (!= a b) (< a b) (> a b) (<= a b) (>= a b) (not x)
+    (len x) (at x i) (get m k) (append a v) (concat a b)
+    (join a sep) (split s sep) (map a f) (filter a f) (reduce a f init)
+    (sort a) (reverse a) (first a) (last a) (keys m) (values m)
+    (contains a x) (trim s) (lower s) (upper s) (replace s f t)
+    (take a n) (drop a n) (str x …) (to-json v)
+    (format-date d f)   strftime-style date formatting (ISO date)
+    (gensym prefix?)    a fresh symbol for macros
 
-指令: %Y %y %m %d %b %B %a %A %%；%-m/%-d はゼロ埋めなし。
-不明な指令はエラー。例: formatDate(date, "%Y年%-m月%-d日") → 2026年8月2日
-    formatDate(d, f)  strftime 風の日付フォーマット（ISO 日付）
+`format-date` の指令: `%Y %y %m %d %b %B %a %A %%`；`%-m`/`%-d` は
+ゼロ埋めなし。不明な指令はエラーです。
+例: `(format-date date "%Y年%-m月%-d日")` -> `2026年8月2日`。
 
-HTML ヘルパー（コンテンツはそのまま挿入。テキストは `esc` でエスケープ）:
-    el(name, attrs, content)  任意のタグ。attrs: true=裸の属性、
-                              false/nil=省略、キーと値はエスケープ
-    esc(s)                    & < > " ' をエスケープ
-    h1 h2 p div span strong em time ul ol li  コンテンツのみのタグ
-    a(content, href)          href をエスケープしたアンカー
-    img(src, alt)             空要素の画像。alt は nil で省略
-    空要素（br、hr、img、input、meta、link、source）は閉じタグなし。
-    puts(...)       引数を stderr に出力（nil を返す）
+HTML は第一級の値です。すべてのタグは関数です:
+
+    (div attrs child …)     an element; attrs is a map (or nil/omitted)
+    (el name attrs child…)  any tag by name
+    (raw html)              insert a string without escaping
+
+属性値 `true` は裸の属性、`false` と `nil` は省略、それ以外はエスケー
+プしてレンダリングされます。テキストの子はエスケープされ、`raw` は
+信頼できる HTML を挿入します。空要素（br、hr、img、input、meta、
+link、source）は閉じタグを持ちません。
 
 #### 例
 
-    # src/_scripts/hello.d
-    "<h2>Hello #{get(site, "siteName")}!</h2>"
-      + join(map(posts, { p -> "<li>" + get(p, "title") + "</li>" }), "")
+    ; src/_scripts/hello.d
+    (defmacro labeled (label value) `(li (str ,label ": " ,value)))
+    (ul
+      (map posts
+        (fn (post) (labeled "post" (get post "title")))))
 
-    # src/_pages/hello.md
+    ; src/_pages/hello.md
     ---
     title: Hello
     script: hello.d
     ---
+
+#### ページシェル
+
+`<html>` 文書全体はレイアウトスクリプトによって生成されます。完成
+したページ本文は `content` としてそれに渡されます。各プリセットは
+それぞれのシェルを同梱しています。フォークするには、`src/` 配下に
+コピーし、`theme.layout` をそのコピーに向けます:
+
+    theme:
+      layout: layout.d
+
+レイアウトスクリプトはすべての HTML ページに対して、上記のスクリプト
+コンテキストに加えて次の束縛で実行されます: `content`（完成した
+本文、raw HTML）、`page`（title、ogType、ogPath、ogDescription、
+hasMath）、`nav-links`、`footer-links`、`cssRef`、およびヘルパー
+`og-tags`、`math-tags`、`theme-js`、`code-js` と `t`（i18n 検索）。
+プリセットのシェルは burogu ソースの `app/templates/aria.d` と
+`app/templates/shaft.d` にあり、`theme.layout` はそのプリセットが
+使う方を上書きします。
 
 ### 静的ファイルとビルトイン出力
 

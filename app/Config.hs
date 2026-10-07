@@ -1,16 +1,18 @@
-module Config (DeployConfig (..), RawConfig (..), RawDeploy (..), RawTheme (..), SiteConfig (..), Theme (..), knownConfigKeys, loadConfig) where
+module Config (DeployConfig (..), Layout (..), RawConfig (..), RawDeploy (..), RawTheme (..), SiteConfig (..), Theme (..), knownConfigKeys, loadConfig) where
 
 import Control.Exception (IOException, catch)
 import Css (Fonts (..), emptyFonts)
 import Data.Aeson (FromJSON (..), Value (..), withObject, (.:?))
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Text.IO qualified as TIO
 import Data.Yaml (ParseException, decodeEither', prettyPrintParseException)
+import Script (Env, Program)
 import Shaft (presetNames)
 import System.Exit (exitFailure)
 import System.IO (stderr)
@@ -28,6 +30,16 @@ data SiteConfig = SiteConfig
     , siteDeploy :: DeployConfig
     , siteSrcRepo :: Maybe Text
     , siteTheme :: Theme
+    , siteLayout :: Layout
+    }
+
+{- | The layout script runtime: the compiled layout program (Nothing
+means the embedded default) plus the model globals (posts, pages, tags,
+config, data) the host exposes to it.
+-}
+data Layout = Layout
+    { layProgram :: Maybe Program
+    , layGlobals :: Env
     }
 
 data DeployConfig = DeployConfig
@@ -45,6 +57,7 @@ data Theme = Theme
     , themeExtraJs :: [Text]
     , themePreset :: Text
     , themeFonts :: Fonts
+    , themeLayout :: Maybe Text
     }
 
 {- | User font overrides for the theme preset. Every field is optional;
@@ -80,6 +93,7 @@ data RawTheme = RawTheme
     , rawExtraJs :: Maybe [Text]
     , rawPreset :: Maybe Text
     , rawFonts :: Maybe Fonts
+    , rawLayout :: Maybe Text
     }
 
 instance FromJSON RawConfig where
@@ -116,6 +130,7 @@ instance FromJSON RawTheme where
             <*> object .:? "extraJs"
             <*> object .:? "preset"
             <*> object .:? "fonts"
+            <*> object .:? "layout"
 
 loadConfig :: FilePath -> IO SiteConfig
 loadConfig path = do
@@ -152,7 +167,7 @@ loadConfig path = do
         copyright <- field "siteCopyright" (rawCopyright raw) ("© " <> author)
         separator <- field "footerSeparator" (rawFooterSeparator raw) " · "
         theme <- resolveTheme (rawTheme raw)
-        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteFooterSeparator = separator, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme}
+        pure SiteConfig{siteName = name, siteAuthor = author, siteDescription = description, siteLang = lang, siteBaseUrl = baseUrl, siteCopyright = copyright, siteGeneratedBy = rawGeneratedBy raw, siteFooterSeparator = separator, siteDeploy = resolveDeploy (rawDeploy raw), siteSrcRepo = rawSrcRepo raw, siteTheme = theme, siteLayout = Layout Nothing Map.empty}
 
 rejectTagsLabel :: Maybe Text -> IO ()
 rejectTagsLabel Nothing = pure ()
@@ -211,7 +226,7 @@ resolveTheme (Just raw) = do
     let extraCss = fromMaybe [] (rawExtraCss raw)
         extraJs = fromMaybe [] (rawExtraJs raw)
         fonts = fromMaybe emptyFonts (rawFonts raw)
-    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss, themeExtraJs = extraJs, themePreset = preset, themeFonts = fonts}
+    pure Theme{themeMath = math, themeMathUrl = mathUrl, themeExtraCss = extraCss, themeExtraJs = extraJs, themePreset = preset, themeFonts = fonts, themeLayout = rawLayout raw}
 
 resolveMathUrl :: Text -> Maybe Text -> IO (Maybe Text)
 resolveMathUrl "none" (Just _) = do
@@ -267,10 +282,11 @@ defaults =
         , siteDeploy = DeployConfig{deployTarget = Nothing, deployRepo = Nothing, deployBranch = Nothing, deployCommitName = Nothing, deployCommitEmail = Nothing}
         , siteSrcRepo = Nothing
         , siteTheme = defaultTheme
+        , siteLayout = Layout Nothing Map.empty
         }
 
 defaultTheme :: Theme
-defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = [], themePreset = defaultPreset, themeFonts = emptyFonts}
+defaultTheme = Theme{themeMath = defaultMathMethod, themeMathUrl = Nothing, themeExtraCss = [], themeExtraJs = [], themePreset = defaultPreset, themeFonts = emptyFonts, themeLayout = Nothing}
 
 defaultMathMethod :: Text
 defaultMathMethod = "mathjax"
